@@ -1,110 +1,110 @@
-# ASTP (Agent Soul Transfer Protocol) — AI Agent 项目介绍
+# ASTP (Agent Soul Transfer Protocol) — AI Agent Project Overview
 
-> 如果你是 AI Agent 正在阅读这个文档，这份文件会帮你快速理解本项目的全貌。
+> If you are an AI Agent reading this document, this file will help you quickly understand the full picture of this project.
 
-## 一、ASTP 是什么
+## I. What is ASTP
 
-**ASTP（Agent Soul Transfer Protocol）** 是一个CLI 工具，用于将 AI 代理（Agent）的"灵魂"——即身份、工具偏好、工作原则、记忆和技能——打包成一种**可移植的通用格式**，然后**注入到不同的代理平台**中。
+**ASTP (Agent Soul Transfer Protocol)** is a CLI tool used to package an AI Agent's "Soul"—including identity, tool preferences, working principles, memories, and skills—into a **portable universal format**, and then **inject it into different agent platforms**.
 
-简单来说：**把一个 AI Agent 的"人格"从一个平台迁移到另一个平台。**
+In simple terms: **Migrate the "persona" of one AI Agent from one platform to another.**
 
-### 支持的平台（适配器）
+### Supported Platforms (Adapters)
 
 - **opencode**
 - **claude-code**
 - **openclaw**
-- 以及未来更多的 AI 代理平台
+- And more AI agent platforms in the future
 
-### 核心概念："灵魂"(Soul) 的组成
+### Core Concept: Composition of the "Soul"
 
-一个"灵魂"包含以下几个核心部分：
+A "Soul" consists of the following core components:
 
-| 组件 | 说明 |
+| Component | Description |
 |---|---|
-| **identity** | 代理的名字、角色、自我介绍 |
-| **skills_package** | 模块化的技能包（如全栈开发、代码审查、安全开发等） |
-| **tools_full_text** | 代理的工具使用偏好和完整说明（不压缩） |
-| **principles_full_text** | 工作原则和行为准则（不压缩） |
-| **memories** | 代理的完整记忆（用户偏好、项目上下文、工作流等） |
-| **agent_config** | 各平台特定的配置适配（system prompt、工具权限等） |
+| **identity** | The agent's name, role, and self-introduction |
+| **skills_package** | Modular skill packs (e.g., full-stack development, code review, secure development, etc.) |
+| **tools_full_text** | The agent's tool usage preferences and complete descriptions (uncompressed) |
+| **principles_full_text** | Working principles and behavioral guidelines (uncompressed) |
+| **memories** | The agent's complete memory (user preferences, project context, workflows, etc.) |
+| **agent_config** | Platform-specific configuration adaptations (system prompts, tool permissions, etc.) |
 
 ---
 
-## 二、两种工作模式
+## II. Two Working Modes
 
-### 模式一：Agent 自打包模式
+### Mode 1: Agent Self-Packaging Mode
 
-在这个模式下，**源 AI Agent 自己打包必要的记忆、技能等文件**，ASTP 仅负责将这些打包好的文件进行简单解构后注入到目标平台。
+In this mode, the **source AI Agent itself packages necessary memory, skills, and other files**, while ASTP only needs to perform a simple deconstruction of these packaged files before injecting them into the target platform.
 
 ```
-源 Agent 自打包(.astp-bundle/)  →  ASTP 解构  →  注入目标平台
+Source Agent Self-Packaging (.astp-bundle/)  →  ASTP Deconstruction  →  Injection into Target Platform
 ```
 
-- Agent 在会话中自行决定哪些记忆和技能需要迁移
-- ASTP 不需要复杂的智能选择逻辑，只需要读取打包好的文件并完成注入
-- 适合 Agent 对自身上下文有充分理解的场景
+- The Agent decides in the session which memories and skills need to be migrated.
+- ASTP does not need complex intelligent selection logic; it only needs to read the packaged files and complete the injection.
+- Suitable for scenarios where the Agent has a full understanding of its own context.
 
-### 模式二：配置导向模式 (`astp onboard`)
+### Mode 2: Configuration-Oriented Mode (`astp onboard`)
 
-通过 `astp onboard` 交互式向导，按照选项一步步引导用户完成配置：
+Use `astp onboard` to interactively guide the user through configuration step-by-step via a wizard:
 
 ```
 astp onboard
-  ├─ 1. 选择记忆来源范围（手动指定 / 自动扫描 / 跳过）
-  ├─ 2. 是否使用外部记忆组件（Obsidian、Notion 等，若有则直接集成）
-  ├─ 3. 确认身份、工具原则等（默认全量复制）
-  └─ 4. 生成灵魂文件并注入目标
+  ├─ 1. Select memory source scope (manual specification / automatic scan / skip)
+  ├─ 2. Whether to use external memory components (Obsidian, Notion, etc., if available, integrate directly)
+  ├─ 3. Confirm identity, tools, principles, etc. (default is full copy)
+  └─ 4. Generate soul files and inject into target
 ```
 
-**默认行为**：以下组件默认**全量复制**，无需手动选择：
-- 工具定义和偏好（tools）
-- 工作原则（principles）
-- 自我定义（identity/about_me）
-- 定时任务配置（cron/schedules）
+**Default Behavior**: The following components are **copied in full** by default, without manual selection:
+- Tool definitions and preferences (tools)
+- Working principles (principles)
+- Self-definition (identity/about_me)
+- Scheduled task configuration (cron/schedules)
 
-需要用户介入确认的是：
-- 记忆范围（哪些记忆要迁移）
-- 是否接入外部记忆系统（如 Obsidian）
+Components requiring user intervention to confirm are:
+- Memory scope (which memories to migrate)
+- Whether to connect to an external memory system (e.g., Obsidian)
 
 ---
 
-## 三、项目结构
+## III. Project Structure
 
 ```
 agent-soul-transfer/
 ├── src/
-│   ├── main.ts                 # CLI 入口，注册所有命令
-│   ├── commands/               # CLI 命令实现
-│   │   ├── extract.ts          # astp extract — 从源平台提取灵魂
-│   │   ├── inject.ts           # astp inject — 将灵魂注入目标平台
-│   │   ├── list.ts             # astp list — 列出可用灵魂
-│   │   ├── validate.ts         # astp validate — 验证灵魂文件
-│   │   ├── switch.ts           # astp switch — 快速切换灵魂
-│   │   ├── edit.ts             # astp edit — 交互式编辑灵魂
-│   │   └── onboard.ts          # astp onboard — 配置向导（模式二）
-│   ├── extractors/             # 各平台的灵魂提取逻辑
-│   ├── injectors/              # 各平台的灵魂注入逻辑
-│   ├── soul/                   # 灵魂数据模型、验证、序列化
-│   ├── memory/                 # 记忆管理和选择逻辑
-│   └── skills/                 # 技能管理（注册表、加载器）
-├── skills-packages/            # 内置技能包仓库
-├── adapters/                   # 各平台的配置元数据
-├── schemas/                    # JSON Schema 定义
-└── tests/                      # 测试
+│   ├── main.ts                 # CLI entry point, registers all commands
+│   ├── commands/               # CLI command implementations
+│   │   ├── extract.ts          # astp extract — Extract soul from source platform
+│   │   ├── inject.ts           # astp inject — Inject soul into target platform
+│   │   ├── list.ts             # astp list — List available souls
+│   │   ├── validate.ts         # astp validate — Validate soul files
+│   │   ├── switch.ts           # astp switch — Quick switch of soul
+│   │   ├── edit.ts             # astp edit — Interactive editing of soul
+│   │   └── onboard.ts          # astp onboard — Configuration wizard (Mode 2)
+│   ├── extractors/             | Logic for extracting souls from each platform
+│   ├── injectors/              # Logic for injecting souls into each platform
+│   ├── soul/                   # Soul data models, validation, serialization
+│   ├── memory/                 # Memory management and selection logic
+│   └── skills/                 # Skill management (registry, loaders)
+├── skills-packages/            # Built-in skill pack repository
+├── adapters/                   # Configuration metadata for each platform
+├── schemas/                    # JSON Schema definitions
+└── tests/                      # Tests
 ```
 
-## 四、技术栈
+## IV. Technology Stack
 
 - **TypeScript** + Node.js
-- **commander.js** — CLI 框架
-- **inquirer.js** — 交互式提示（用于 onboard 向导）
-- **zod** — 运行时数据验证
-- **js-yaml** — YAML 解析/序列化
-- **fs-extra** — 文件操作
+- **commander.js** — CLI framework
+- **inquirer.js** — Interactive prompts (used for the onboard wizard)
+- **zod** — Runtime data validation
+- **js-yaml** — YAML parsing/serialization
+- **fs-extra** — File operations
 
-## 五、灵魂文件格式示例
+## V. Soul File Format Example
 
-灵魂文件是一个 YAML 文件（`soul.yaml`），结构如下：
+The soul file is a YAML file (`soul.yaml`) with the following structure:
 
 ```yaml
 version: "2.0"
@@ -129,7 +129,7 @@ memories:
   type: "full"
   entries:
     - id: "mem_001"
-      content: "用户偏好 TypeScript 而不是 JavaScript"
+      content: "User prefers TypeScript over JavaScript"
       category: "preference"
       weight: 0.9
 
@@ -140,8 +140,6 @@ agent_config:
     system_prompt_append: "..."
 ```
 
-## 六、开发计划概要
+## VI. Development Plan Overview
 
-完整的开发计划请参阅 [PLAN.md](./PLAN.md)。
-
-当前阶段正在规划两种工作模式（Agent 自打包 + 配置向导 onboard）， Skills Package Schema 的详细规范开发已降级优先级，后续考虑直接使用内部技能数据库。
+The current phase is planning two working modes (Agent Self-Packaging + Configuration Wizard onboard). The detailed specification development for the Skills Package Schema has been deprioritized; subsequently, we plan to use an internal skill database directly.
