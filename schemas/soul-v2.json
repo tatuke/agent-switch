@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Soul Transfer Protocol - Soul Schema v2",
+  "type": "object",
+  "required": ["version", "metadata", "identity", "skills_package", "tools_full_text", "principles_full_text", "memories", "agent_config"],
+  "properties": {
+    "version": {
+      "const": "2.0",
+      "description": "Soul schema version"
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["created", "source_agent", "target_compatibility"],
+      "properties": {
+        "created": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source_agent": {
+          "type": "string"
+        },
+        "target_compatibility": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["name", "role", "about_me"],
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "about_me": { "type": "string" }
+      }
+    },
+    "skills_package": {
+      "type": "object",
+      "required": ["packages"],
+      "properties": {
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "version", "content"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "version": { "type": "string" },
+              "content": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "tools_full_text": {
+      "type": "string",
+      "description": "Full text of tool preferences and usage guidelines"
+    },
+    "principles_full_text": {
+      "type": "string",
+      "description": "Full text of working principles and behavioral guidelines"
+    },
+    "memories": {
+      "type": "object",
+      "required": ["type", "entries"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["full", "curated", "tagged"]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "content", "category", "weight", "created"],
+            "properties": {
+              "id": { "type": "string" },
+              "content": { "type": "string" },
+              "category": { "type": "string" },
+              "weight": { "type": "number", "minimum": 0, "maximum": 1 },
+              "created": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      }
+    },
+    "agent_config": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    }
+  }
+}

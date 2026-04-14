@@ -1,0 +1,20 @@
+{
+  "agent": "claude-code",
+  "description": "Claude Code CLI agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "global": "~/.claude/CLAUDE.md",
+      "project": "./CLAUDE.md",
+      "description": "System prompt and agent identity"
+    },
+    "config": {
+      "global": "~/.claude/config.json",
+      "project": "./.claude/",
+      "description": "Tool permissions and agent configuration directory"
+    },
+    "settings": {
+      "global": "~/.claude/settings.json",
+      "description": "Claude-specific settings and preferences"
+    }
+  }
+}

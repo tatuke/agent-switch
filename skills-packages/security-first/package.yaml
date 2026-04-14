@@ -1,0 +1,9 @@
+name: "security-first"
+description: "Security-focused development practices"
+version: "1.0"
+content: |
+  Always prioritize security:
+  - Never expose secrets, API keys, or credentials in code or logs
+  - Validate all inputs and sanitize user data
+  - Use secure defaults and follow security best practices
+  - Never commit sensitive information to version control

@@ -1,0 +1,16 @@
+{
+  "agent": "openclaw",
+  "description": "OpenClaw agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "global": "~/.openclaw/AGENTS.md",
+      "project": "./AGENTS.md",
+      "description": "System prompt and agent identity"
+    },
+    "config": {
+      "global": "~/.openclaw/config.yaml",
+      "project": "./.openclaw/config.yaml",
+      "description": "Agent configuration and tool settings"
+    }
+  }
+}

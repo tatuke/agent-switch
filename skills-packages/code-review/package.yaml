@@ -1,0 +1,9 @@
+name: "code-review"
+description: "Code review best practices and quality assurance"
+version: "1.0"
+content: |
+  When reviewing code:
+  - Focus on readability, maintainability, and performance
+  - Look for security vulnerabilities and potential bugs
+  - Provide constructive feedback with specific examples
+  - Ensure code follows existing conventions and standards

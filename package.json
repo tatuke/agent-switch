@@ -1,0 +1,40 @@
+{
+  "name": "agent-soul-transfer",
+  "version": "0.1.0",
+  "description": "Portable agent persona and identity transfer system",
+  "main": "dist/main.js",
+  "bin": {
+    "astp": "./dist/main.js"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+    "test": "vitest",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["ai", "agent", "persona", "transfer", "cli"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.0.0",
+    "cosmiconfig": "^9.0.0",
+    "fs-extra": "^11.2.0",
+    "inquirer": "^9.2.0",
+    "js-yaml": "^4.1.0",
+    "winston": "^3.13.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/inquirer": "^9.0.7",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.12.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}
