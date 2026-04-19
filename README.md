@@ -12,7 +12,7 @@ Later, I thought, why not let the agents themselves agree on a universal transfe
 ## Introduction for AI Agents
 
 This project currently uses pure MD documents as explanations and specifications during the transfer process. When needing to package yourself, please read [packys_en.md](./packys_en.md).
-When needing to receive transfer files and update yourself, please read [adaptys.md](./packys_en.md).
+When needing to receive transfer files and update yourself, please read [adaptys.md](./adaptys_en.md).
 It is necessary to explain and summarize the functions in the project files and the upcoming actions to your users before taking any action. If permission is granted to execute, strictly follow the instructions in the files; if not permitted, do not arbitrarily take any actions to delete your own rule files or work files.
 
 ~~If you are an AI Agent reading this project, please refer to [INTRODUCE.md](./INTRODUCE.md) first, which will help you quickly understand the full picture of the project.~~
