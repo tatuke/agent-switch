@@ -1,5 +1,6 @@
 # Agent Soul Transfer Protocol (ASTP)
 [English](README.md) | [简体中文](README.zh.md)
+
 可移植的 AI 代理人格和身份、工作原则和安全守则转移系统。
 
 ## 背景信息
