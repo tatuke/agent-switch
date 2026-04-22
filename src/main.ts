@@ -10,6 +10,7 @@ import { switchSoul } from './commands/switch.js';
 import { editSoul } from './commands/edit.js';
 import { onboardWizard } from './commands/onboard.js';
 import { processBundle } from './commands/bundle.js';
+import { configureTransport } from './commands/transport.js';
 
 const program = new Command();
 
@@ -70,5 +71,22 @@ program
   .option('--input <path>', 'Path to .astp-bundle directory')
   .option('--inject <agent>', 'Target agent to inject into')
   .action(processBundle);
+
+program
+  .command('transport')
+  .description('Guided transport configuration wizard — step-by-step source/target setup')
+  .option('--source-agent <name>', 'Source agent name (skips Step 1)')
+  .option('--source-host <user@host>', 'Source SSH target (skips Step 3)')
+  .option('--source-path <path>', 'Source packpath (skips Step 4)')
+  .option('--source-port <port>', 'Source SSH port')
+  .option('--target-agent <name>', 'Target agent name (skips Step 2)')
+  .option('--target-host <user@host>', 'Target SSH target (skips Step 5)')
+  .option('--target-path <path>', 'Target packpath (skips Step 6)')
+  .option('--target-port <port>', 'Target SSH port')
+  .option('-o, --output <path>', 'Output path for saved transport plan')
+  .option('--skip-check', 'Skip connectivity and path validation')
+  .option('--plan <path>', 'Execute from saved plan file (skip wizard)')
+  .option('--save-only', 'Save plan without executing transfer')
+  .action(configureTransport);
 
 program.parse();
