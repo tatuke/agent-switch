@@ -1,0 +1,18 @@
+{
+  "agent": "kiro",
+  "description": "AWS Kiro IDE agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "project": "./.kiro/steering/",
+      "description": "Kiro steering files (context injection rules)"
+    },
+    "agents_definition": {
+      "project": "./.kiro/agents/",
+      "description": "Kiro agent definitions (dual .md + .json format)"
+    },
+    "config": {
+      "project": "./.kiro/",
+      "description": "Kiro configuration directory (agents, steering, hooks, skills)"
+    }
+  }
+}

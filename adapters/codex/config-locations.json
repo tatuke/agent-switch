@@ -1,0 +1,16 @@
+{
+  "agent": "codex",
+  "description": "OpenAI Codex CLI/App agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "global": "~/.codex/AGENTS.md",
+      "project": "./AGENTS.md",
+      "description": "Codex agent instructions"
+    },
+    "config": {
+      "global": "~/.codex/config.toml",
+      "project": "./.codex/config.toml",
+      "description": "Codex runtime configuration"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "agent": "cursor",
+  "description": "Cursor IDE agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "project": "./.cursor/rules/",
+      "description": "Cursor IDE rules directory (rule files in .mdc format)"
+    },
+    "config": {
+      "project": "./.cursor/",
+      "description": "Cursor IDE configuration directory (rules, skills, hooks)"
+    }
+  }
+}

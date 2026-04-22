@@ -1,0 +1,16 @@
+{
+  "agent": "hermes",
+  "description": "Hermes agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "global": "~/.hermes/AGENTS.md",
+      "project": "./AGENTS.md",
+      "description": "Hermes agent identity and instructions"
+    },
+    "config": {
+      "global": "~/.hermes/config.yaml",
+      "project": "./.hermes/config.yaml",
+      "description": "Hermes agent configuration"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "agent": "gemini-cli",
+  "description": "Google Gemini CLI agent configuration locations",
+  "paths": {
+    "agents_file": {
+      "global": "~/.gemini/GEMINI.md",
+      "project": "./GEMINI.md",
+      "description": "Gemini agent instructions and rules"
+    },
+    "config": {
+      "global": "~/.gemini/",
+      "project": "./.gemini/",
+      "description": "Gemini configuration directory"
+    }
+  }
+}
