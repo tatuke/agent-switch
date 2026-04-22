@@ -1,6 +1,10 @@
 name: "full-stack-development"
 description: "Full stack web development with React, Node.js, and TypeScript"
 version: "1.0"
+dependencies: []
+stability: "stable"
+cost_class: "medium"
+origin: "custom"
 content: |
   You are proficient in full-stack web development:
   - Frontend: React, Vue, TypeScript, CSS, HTML

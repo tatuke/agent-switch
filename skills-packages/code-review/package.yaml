@@ -1,6 +1,10 @@
 name: "code-review"
 description: "Code review best practices and quality assurance"
 version: "1.0"
+dependencies: []
+stability: "stable"
+cost_class: "light"
+origin: "custom"
 content: |
   When reviewing code:
   - Focus on readability, maintainability, and performance

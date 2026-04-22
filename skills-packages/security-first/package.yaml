@@ -1,6 +1,10 @@
 name: "security-first"
 description: "Security-focused development practices"
 version: "1.0"
+dependencies: []
+stability: "stable"
+cost_class: "light"
+origin: "custom"
 content: |
   Always prioritize security:
   - Never expose secrets, API keys, or credentials in code or logs
