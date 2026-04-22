@@ -47,7 +47,31 @@
               "name": { "type": "string" },
               "description": { "type": "string" },
               "version": { "type": "string" },
-              "content": { "type": "string" }
+              "content": { "type": "string" },
+              "dependencies": {
+                "type": "array",
+                "items": { "type": "string" },
+                "default": [],
+                "description": "Other skill package IDs this package depends on"
+              },
+              "stability": {
+                "type": "string",
+                "enum": ["experimental", "beta", "stable"],
+                "default": "stable",
+                "description": "Release maturity level"
+              },
+              "cost_class": {
+                "type": "string",
+                "enum": ["light", "medium", "heavy"],
+                "default": "medium",
+                "description": "Context window budget indicator"
+              },
+              "origin": {
+                "type": "string",
+                "enum": ["ECC", "community", "custom"],
+                "default": "custom",
+                "description": "Provenance tracking"
+              }
             }
           }
         }
@@ -92,6 +116,32 @@
       "type": "object",
       "additionalProperties": {
         "type": "object"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Extended bundle metadata fields",
+      "properties": {
+        "stability": {
+          "type": "string",
+          "enum": ["experimental", "beta", "stable"],
+          "default": "stable"
+        },
+        "cost_class": {
+          "type": "string",
+          "enum": ["light", "medium", "heavy"],
+          "default": "medium"
+        },
+        "origin": {
+          "type": "string",
+          "enum": ["ECC", "community", "custom"],
+          "default": "custom"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": []
+        }
       }
     }
   }

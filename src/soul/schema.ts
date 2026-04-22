@@ -12,11 +12,26 @@ export const IdentitySchema = z.object({
   about_me: z.string(),
 });
 
+export const StabilityEnum = z.enum(['experimental', 'beta', 'stable']);
+export const CostClassEnum = z.enum(['light', 'medium', 'heavy']);
+export const OriginEnum = z.enum(['ECC', 'community', 'custom']);
+
 export const SkillsPackageEntrySchema = z.object({
   name: z.string(),
   description: z.string(),
   version: z.string(),
   content: z.string(),
+  dependencies: z.array(z.string()).default([]),
+  stability: StabilityEnum.default('stable'),
+  cost_class: CostClassEnum.default('medium'),
+  origin: OriginEnum.default('custom'),
+});
+
+export const BundleMetadataSchema = z.object({
+  stability: StabilityEnum.default('stable'),
+  cost_class: CostClassEnum.default('medium'),
+  origin: OriginEnum.default('custom'),
+  dependencies: z.array(z.string()).default([]),
 });
 
 export const SkillsPackageSchema = z.object({
@@ -56,4 +71,8 @@ export type SkillsPackage = z.infer<typeof SkillsPackageSchema>;
 export type MemoriesEntry = z.infer<typeof MemoriesEntrySchema>;
 export type Memories = z.infer<typeof MemoriesSchema>;
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
+export type StabilityEnum = z.infer<typeof StabilityEnum>;
+export type CostClassEnum = z.infer<typeof CostClassEnum>;
+export type OriginEnum = z.infer<typeof OriginEnum>;
+export type BundleMetadata = z.infer<typeof BundleMetadataSchema>;
 export type Soul = z.infer<typeof SoulSchema>;
