@@ -30,3 +30,24 @@ export function getSoulPathFromInput(input: string): string {
   if (input.endsWith('.yaml') || input.endsWith('.yml')) return path.resolve(input);
   return getSoulPath(input);
 }
+
+export const ADAPTERS_DIR = path.join(
+  path.dirname(path.dirname(path.dirname(__dirname))),
+  'adapters'
+);
+
+export function getAdapterDir(agentName: string): string {
+  return path.join(ADAPTERS_DIR, normalizeAgentDirName(agentName));
+}
+
+export function getAdapterProfilePath(agentName: string): string {
+  return path.join(getAdapterDir(agentName), 'profile.json');
+}
+
+export function getAdapterConfigPath(agentName: string): string {
+  return path.join(getAdapterDir(agentName), 'config-locations.json');
+}
+
+function normalizeAgentDirName(agentName: string): string {
+  return agentName.trim().toLowerCase().replace(/\s+/g, '-');
+}

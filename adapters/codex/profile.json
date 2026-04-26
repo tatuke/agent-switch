@@ -1,0 +1,67 @@
+{
+  "agent": "codex",
+  "version_range": "1.x",
+  "capability_signatures": {
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex", "include_filter"],
+      "match_note": "Codex search tool, regex support"
+    },
+    "read": {
+      "input": "file_path",
+      "output": "content",
+      "constraints": ["offset", "limit"],
+      "match_note": "Codex read tool, supports offset/limit"
+    },
+    "edit": {
+      "input": "file_path + old_string + new_string",
+      "output": "modified_file",
+      "constraints": ["exact_match", "replaceAll"],
+      "match_note": "Codex edit tool, exact string replace"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr + exit_code",
+      "constraints": ["timeout", "workdir"],
+      "match_note": "Codex shell tool, sandboxed execution"
+    },
+    "fetch": null,
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": ["Shell", "Read", "Edit", "Write", "Glob", "Grep"],
+  "rule_system": {
+    "type": "single_file",
+    "format": "markdown",
+    "global_file": "~/.codex/AGENTS.md",
+    "project_file": "./AGENTS.md",
+    "injection": "append_to_system_prompt"
+  },
+  "tool_permissions": {
+    "type": "toml",
+    "location": "~/.codex/config.toml",
+    "format": "approval_policy"
+  },
+  "hook_system": {
+    "type": "none",
+    "entry": "none"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true
+  },
+  "session_launch": {
+    "command": "codex",
+    "pipe_mode": "exec",
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
+  }
+}

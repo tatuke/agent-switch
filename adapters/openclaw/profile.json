@@ -1,0 +1,84 @@
+{
+  "agent": "openclaw",
+  "version_range": "2026.x",
+  "capability_signatures": {
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex"],
+      "match_note": "Content search via agent tool capabilities"
+    },
+    "read": {
+      "input": "file_path | url",
+      "output": "content",
+      "constraints": ["offset", "limit"],
+      "match_note": "File reading via agent tool capabilities"
+    },
+    "edit": {
+      "input": "file_path + old_string + new_string",
+      "output": "modified_file",
+      "constraints": ["exact_match"],
+      "match_note": "File editing via agent tool capabilities"
+    },
+    "write": {
+      "input": "file_path + content",
+      "output": "written_file",
+      "constraints": ["overwrite"],
+      "match_note": "File writing via agent tool capabilities"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr + exit_code",
+      "constraints": ["timeout"],
+      "match_note": "Shell execution via agent tool capabilities or exec-approvals"
+    },
+    "fetch": {
+      "input": "url",
+      "output": "markdown | html | text",
+      "constraints": ["format_selection"],
+      "match_note": "Web fetching via agent tool capabilities"
+    },
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": ["search", "read", "edit", "write", "execute", "fetch", "channels", "skills"],
+  "rule_system": {
+    "type": "directory_based",
+    "format": "markdown",
+    "global_file": "~/.openclaw/workspace/AGENTS.md",
+    "project_file": "./AGENTS.md",
+    "injection": "workspace_file_hierarchy",
+    "note": "OpenClaw reads multiple workspace files at session startup: SOUL.md, USER.md, IDENTITY.md, TOOLS.md, HEARTBEAT.md, plus memory/YYYY-MM-DD.md"
+  },
+  "tool_permissions": {
+    "type": "json_config",
+    "location": "~/.openclaw/openclaw.json",
+    "format": "exec_approvals_map",
+    "note": "exec-approvals.json controls which shell commands are auto-approved vs require confirmation"
+  },
+  "hook_system": {
+    "type": "skill_based",
+    "entry": "Skills in ~/.openclaw/skills/ directory with SKILL.md entry point",
+    "note": "OpenClaw has a rich skill system including lark-* skills, channels, cron, heartbeat"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true,
+    "trash_over_rm": true,
+    "ask_before_external_actions": true
+  },
+  "session_launch": {
+    "command": "openclaw",
+    "pipe_mode": "agent -m --local",
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "note": "openclaw agent -m <prompt> --local runs one agent turn locally",
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
+  }
+}

@@ -3,14 +3,33 @@
   "description": "OpenClaw agent configuration locations",
   "paths": {
     "agents_file": {
-      "global": "~/.openclaw/AGENTS.md",
+      "global": "~/.openclaw/workspace/AGENTS.md",
       "project": "./AGENTS.md",
-      "description": "System prompt and agent identity"
+      "description": "Primary system prompt and workspace rules"
+    },
+    "workspace_files": {
+      "global": "~/.openclaw/workspace/",
+      "description": "Core workspace definition files: SOUL.md, IDENTITY.md, USER.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md"
     },
     "config": {
-      "global": "~/.openclaw/config.yaml",
-      "project": "./.openclaw/config.yaml",
-      "description": "Agent configuration and tool settings"
+      "global": "~/.openclaw/openclaw.json",
+      "description": "Agent configuration, model providers, exec approvals, channel settings"
+    },
+    "exec_approvals": {
+      "global": "~/.openclaw/exec-approvals.json",
+      "description": "Shell command approval policy (auto-approve vs require confirmation)"
+    },
+    "skills": {
+      "global": "~/.openclaw/skills/",
+      "description": "Skill packages directory (each skill has SKILL.md entry point)"
+    },
+    "memory": {
+      "global": "~/.openclaw/workspace/memory/",
+      "description": "Daily memory files (YYYY-MM-DD.md) and MEMORY.md for long-term"
+    },
+    "credentials": {
+      "global": "~/.openclaw/credentials/",
+      "description": "Credential storage (reference only, never copy actual secrets)"
     }
   }
 }

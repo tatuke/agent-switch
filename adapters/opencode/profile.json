@@ -1,0 +1,96 @@
+{
+  "agent": "opencode",
+  "version_range": "1.x",
+  "capability_signatures": {
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex", "include_filter", "path_filter"],
+      "match_note": "Grep tool, full regex support with glob and grep sub-tools"
+    },
+    "read": {
+      "input": "file_path | url",
+      "output": "content",
+      "constraints": ["offset", "limit", "image_pdf_support"],
+      "match_note": "Read tool, supports offset/limit and binary files (images, PDFs)"
+    },
+    "edit": {
+      "input": "file_path + old_string + new_string",
+      "output": "modified_file",
+      "constraints": ["exact_match", "replaceAll"],
+      "match_note": "Edit tool, exact string replacement with replaceAll option"
+    },
+    "write": {
+      "input": "file_path + content",
+      "output": "written_file",
+      "constraints": ["overwrite"],
+      "match_note": "Write tool, creates or overwrites files entirely"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr + exit_code",
+      "constraints": ["timeout", "workdir"],
+      "match_note": "Bash tool, configurable timeout and workdir parameter"
+    },
+    "fetch": {
+      "input": "url",
+      "output": "markdown | html | text",
+      "constraints": ["format_selection", "timeout"],
+      "match_note": "webFetch tool, format selectable output"
+    },
+    "glob": {
+      "input": "pattern_string",
+      "output": "[file_path]",
+      "constraints": ["glob_syntax", "path_filter"],
+      "match_note": "Glob tool, fast filename pattern matching"
+    },
+    "task": {
+      "input": "description_string",
+      "output": "task_result",
+      "constraints": ["subagent_dispatch"],
+      "match_note": "Task tool, dispatch sub-agents for parallel work"
+    },
+    "skill": {
+      "input": "skill_name",
+      "output": "skill_content",
+      "constraints": ["name_lookup"],
+      "match_note": "Skill tool, load specialized skill instructions"
+    },
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": ["Grep", "Read", "Edit", "Write", "Bash", "webFetch", "Glob", "Task", "Question", "Skill", "TodoWrite"],
+  "rule_system": {
+    "type": "single_file",
+    "format": "markdown",
+    "global_file": "~/.config/opencode/AGENTS.md",
+    "project_file": "./AGENTS.md",
+    "injection": "append_to_system_prompt"
+  },
+  "tool_permissions": {
+    "type": "json_config",
+    "location": "~/.config/opencode/opencode.json",
+    "format": "boolean_map_per_tool"
+  },
+  "hook_system": {
+    "type": "skill_based",
+    "entry": "Skill tool invocation"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true
+  },
+  "session_launch": {
+    "command": "opencode",
+    "pipe_mode": "-p",
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
+  }
+}

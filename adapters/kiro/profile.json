@@ -1,0 +1,43 @@
+{
+  "agent": "kiro",
+  "version_range": "1.x",
+  "capability_signatures": {
+    "search": null,
+    "read": null,
+    "edit": null,
+    "execute": null,
+    "fetch": null,
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": [],
+  "rule_system": {
+    "type": "directory",
+    "format": "markdown",
+    "global_file": "none",
+    "project_file": "./.kiro/steering/",
+    "injection": "append_to_system_prompt"
+  },
+  "tool_permissions": {
+    "type": "ide_config",
+    "location": "./.kiro/",
+    "format": "settings_json"
+  },
+  "hook_system": {
+    "type": "none",
+    "entry": "none"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true
+  },
+  "session_launch": {
+    "command": null,
+    "pipe_mode": null,
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "note": "IDE-based agent, no CLI launch mode"
+  }
+}

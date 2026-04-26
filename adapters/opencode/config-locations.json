@@ -3,12 +3,12 @@
   "description": "OpenCode CLI agent configuration locations",
   "paths": {
     "agents_file": {
-      "global": "~/.opencode/AGENTS.md",
+      "global": "~/.config/opencode/AGENTS.md",
       "project": "./AGENTS.md",
       "description": "System prompt and agent identity"
     },
     "config": {
-      "global": "~/.opencode/config.json",
+      "global": "~/.config/opencode/opencode.json",
       "project": "./.opencode/config.json",
       "description": "Tool permissions and agent configuration"
     },

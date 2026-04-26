@@ -1,0 +1,72 @@
+{
+  "agent": "claude-code",
+  "version_range": "1.x",
+  "capability_signatures": {
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex", "include_filter"],
+      "match_note": "Grep tool, regex support"
+    },
+    "read": {
+      "input": "file_path | url",
+      "output": "content",
+      "constraints": ["offset", "limit"],
+      "match_note": "Read tool, supports offset/limit"
+    },
+    "edit": {
+      "input": "file_path + old_string + new_string",
+      "output": "modified_file",
+      "constraints": ["exact_match", "replaceAll"],
+      "match_note": "Edit tool, exact string replace"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr + exit_code",
+      "constraints": ["timeout"],
+      "match_note": "Bash tool, configurable timeout, no workdir"
+    },
+    "fetch": {
+      "input": "url",
+      "output": "markdown | html | text",
+      "constraints": ["format_selection", "timeout"],
+      "match_note": "webFetch tool"
+    },
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "WebFetch", "Task", "TodoWrite"],
+  "rule_system": {
+    "type": "single_file",
+    "format": "markdown",
+    "global_file": "~/.claude/CLAUDE.md",
+    "project_file": "./CLAUDE.md",
+    "injection": "append_to_system_prompt"
+  },
+  "tool_permissions": {
+    "type": "settings_json",
+    "location": "~/.claude/settings.json",
+    "format": "allow_list"
+  },
+  "hook_system": {
+    "type": "hooks_config",
+    "entry": "Hooks in settings.json"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true
+  },
+  "session_launch": {
+    "command": "claude",
+    "pipe_mode": "-p",
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
+  }
+}

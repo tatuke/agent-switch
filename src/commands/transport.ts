@@ -348,7 +348,7 @@ async function step8_previewAndEdit(state: TransportWizardState): Promise<boolea
   if (action === 'confirm') {
     return true;
   } else if (action === 'edit') {
-    const { editField } = await inquirer.prompt([
+    const { editField: fieldToEdit } = await inquirer.prompt([
       {
         type: 'list',
         name: 'editField',
@@ -366,7 +366,7 @@ async function step8_previewAndEdit(state: TransportWizardState): Promise<boolea
       },
     ]);
 
-    await editField(editField, state);
+    await editField(fieldToEdit, state);
     return step8_previewAndEdit(state);
   } else {
     return false;
