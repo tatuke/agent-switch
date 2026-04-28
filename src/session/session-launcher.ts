@@ -6,6 +6,15 @@ import { logger } from '../utils/logger.js';
 import { buildPackPrompt, buildCliCommand } from './prompt-builder.js';
 import { sshCopyFiles, sshExecCommand, sshCheckCommandExists } from './ssh-exec.js';
 
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function encodeForRemoteShell(command: string): string {
+  const b64 = Buffer.from(command, 'utf-8').toString('base64');
+  return `bash -lic 'eval "$(echo ${b64} | base64 -d)"'`;
+}
+
 interface SessionLaunchOptions {
   sourceProfile: Profile;
   targetProfile: Profile;
@@ -71,12 +80,14 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
 
   logger.info('[1.3] Launching agent session...');
   const prompt = buildPackPrompt(sourceProfile, targetProfile, remoteSessionDir);
-  const cliFullCommand = buildCliCommand(sourceProfile, prompt);
+  const agentCommand = buildCliCommand(sourceProfile, prompt);
+  const fullCommand = `cd ${shellEscape(sourcePackPath)} && ${agentCommand}`;
+  const remoteCommand = encodeForRemoteShell(fullCommand);
 
   const timeoutMs = sourceProfile.session_launch.timeout_seconds * 1000;
 
   try {
-    const { stdout, stderr } = await sshExecCommand(sourceTarget, sourcePort, cliFullCommand, timeoutMs);
+    const { stdout, stderr } = await sshExecCommand(sourceTarget, sourcePort, remoteCommand, timeoutMs);
     logger.info(`Agent session stdout: ${stdout.substring(0, 200)}`);
     if (stderr) logger.warn(`Agent session stderr: ${stderr.substring(0, 200)}`);
   } catch (e) {
@@ -86,13 +97,13 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   }
 
   logger.info('[1.4] Checking bundle result...');
-  const manifestPath = `${sourcePackPath}/.astp-bundle/manifest.yaml`;
-  const manifestCheck = await sshExecCommand(sourceTarget, sourcePort, `test -e '${manifestPath.replace(/'/g, "'\\''")}'`, 10000);
-
-  if (!manifestCheck) {
+  const manifestPath = `${sourcePackPath}/manifest.yaml`;
+  try {
+    await sshExecCommand(sourceTarget, sourcePort, `test -e ${shellEscape(manifestPath)}`, 10000);
+  } catch {
     return { success: false, error: 'Bundle manifest not found after session. Packing may have failed.' };
   }
 
   logger.info('[1.5] Session complete.');
-  return { success: true, bundleRemotePath: `${sourcePackPath}/.astp-bundle` };
+  return { success: true, bundleRemotePath: sourcePackPath };
 }

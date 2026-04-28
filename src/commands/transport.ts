@@ -1,8 +1,9 @@
 import inquirer from 'inquirer';
 import yaml from 'js-yaml';
 import path from 'node:path';
+import os from 'node:os';
 import * as fs from 'fs-extra';
-import { getTransferPlanPath, logger } from '../utils/index.js';
+import { getTransferPlanPath, getAdapterProfilePath, getAdapterConfigPath, ADAPTERS_DIR, logger } from '../utils/index.js';
 import { SUPPORTED_AGENTS, type SupportedAgent } from '../utils/config.js';
 import {
   DEFAULT_SSH_PORT,
@@ -13,6 +14,10 @@ import {
   type TransferEndpoint,
   type TransportPlan,
 } from '../transport/index.js';
+import { loadProfile, hasCliSession } from '../adaptys/index.js';
+import type { Profile } from '../soul/schema.js';
+import { launchSourceSession } from '../session/session-launcher.js';
+import { collectBundleAsZip, transferZipToTarget, promptTransferDecision } from './transfer-bundle.js';
 
 interface TransportWizardState {
   sourceAgent: string;
@@ -27,9 +32,12 @@ interface TransportWizardState {
   skipCheck: boolean;
   saveOnly: boolean;
   planFile?: string;
+  sourceProfile?: Profile;
+  targetProfile?: Profile;
 }
 
 export async function configureTransport(options: {
+  plan?: string;
   planFile?: string;
   saveOnly?: boolean;
   skipCheck?: boolean;
@@ -43,8 +51,9 @@ export async function configureTransport(options: {
   targetPort?: string;
   output?: string;
 }): Promise<void> {
-  if (options.planFile) {
-    await executeFromPlan(options.planFile, options.saveOnly);
+  const planPath = options.plan || options.planFile;
+  if (planPath) {
+    await executeFromPlan(planPath, options.saveOnly);
     return;
   }
 
@@ -475,7 +484,19 @@ async function step10_executeOrSave(state: TransportWizardState): Promise<void> 
     return;
   }
 
-  logger.info('TODO: Implement actual file transfer (scp/rsync). Plan is ready for the import stage.');
+  logger.info('[Step 10] Loading agent profiles...');
+  try {
+    state.sourceProfile = await loadProfile(state.sourceAgent);
+  } catch (e) {
+    logger.warn(`Source profile for "${state.sourceAgent}" not found. Proceeding without profile.`);
+  }
+  try {
+    state.targetProfile = await loadProfile(state.targetAgent);
+  } catch (e) {
+    logger.warn(`Target profile for "${state.targetAgent}" not found. Proceeding without profile.`);
+  }
+
+  await executeTransfer(state, outputPath);
 }
 
 async function executeFromPlan(planFile: string, saveOnly?: boolean): Promise<void> {
@@ -498,7 +519,146 @@ async function executeFromPlan(planFile: string, saveOnly?: boolean): Promise<vo
     return;
   }
 
-  logger.info('TODO: Implement actual file transfer (scp/rsync). Plan is ready.');
+  let sourceProfile: Profile | undefined;
+  let targetProfile: Profile | undefined;
+
+  try {
+    sourceProfile = await loadProfile(plan.source.agent);
+  } catch (e) {
+    logger.warn(`Source profile for "${plan.source.agent}" not found.`);
+  }
+  try {
+    targetProfile = await loadProfile(plan.target.agent);
+  } catch (e) {
+    logger.warn(`Target profile for "${plan.target.agent}" not found.`);
+  }
+
+  const state: TransportWizardState = {
+    sourceAgent: plan.source.agent,
+    sourceUserAtHost: plan.source.userAtHost,
+    sourcePackPath: plan.source.packPath,
+    sourcePort: plan.source.port,
+    targetAgent: plan.target.agent,
+    targetUserAtHost: plan.target.userAtHost,
+    targetPackPath: plan.target.packPath,
+    targetPort: plan.target.port,
+    outputPath: '',
+    skipCheck: true,
+    saveOnly: false,
+    sourceProfile,
+    targetProfile,
+  };
+
+  await executeTransfer(state, planPath);
+}
+
+async function executeTransfer(state: TransportWizardState, planPath: string): Promise<void> {
+  const hasCli = state.sourceProfile && hasCliSession(state.sourceProfile);
+
+  if (!hasCli) {
+    logger.warn(`Source agent "${state.sourceAgent}" has no CLI pipe mode.`);
+    logger.info('Falling back to file-copy mode.');
+    logger.info('Please manually start your agent and read the packing instructions.');
+    logger.info('astp will monitor for bundle completion...');
+    logger.info('');
+    logger.info('Manual steps:');
+    logger.info('  1. Start your agent session on the source host');
+    logger.info(`  2. Read the packing instructions (packys.md)`);
+    logger.info('  3. Complete the packing flow to generate .astp-bundle/');
+    logger.info('');
+
+    const tmpDir = path.join(os.tmpdir(), `astp-session-${Date.now()}`);
+    await fs.ensureDir(tmpDir);
+    logger.info(`Session materials saved locally at: ${tmpDir}`);
+    logger.info(`Transport plan at: ${planPath}`);
+    logger.info('');
+    logger.info('To resume after manual packing:');
+    logger.info(`  astp transport --plan ${planPath}`);
+    return;
+  }
+
+  logger.info('[Step 11] Launching source agent packing session via SSH...');
+
+  const remoteSessionDir = '/tmp/astp-session';
+
+  const projectRoot = ADAPTERS_DIR.replace(/\/adapters$/, '');
+  const packysPath = path.join(projectRoot, 'packys_en.md');
+  const targetProfilePath = getAdapterProfilePath(state.targetAgent);
+  const sourceConfigPath = getAdapterConfigPath(state.sourceAgent);
+
+  const sessionResult = await launchSourceSession({
+    sourceProfile: state.sourceProfile!,
+    targetProfile: state.targetProfile!,
+    sourceUserAtHost: state.sourceUserAtHost,
+    sourcePort: state.sourcePort,
+    sourcePackPath: state.sourcePackPath,
+    localPackysPath: packysPath,
+    localTargetProfilePath: targetProfilePath,
+    localSourceConfigPath: sourceConfigPath,
+    remoteSessionDir,
+  });
+
+  if (!sessionResult.success) {
+    logger.error(`Source session failed: ${sessionResult.error}`);
+    logger.info(`Transport plan saved at: ${planPath}`);
+    logger.info('Fix the issue and re-run: astp transport --plan <plan_path>');
+    return;
+  }
+
+  logger.info('[Step 11] Source session completed successfully.');
+
+  const localTmpDir = path.join(os.tmpdir(), `astp-${Date.now()}`);
+
+  logger.info('[Step 12] Packing bundle as zip on source host and collecting...');
+  const localZipPath = await collectBundleAsZip({
+    sourceUserAtHost: state.sourceUserAtHost,
+    sourcePort: state.sourcePort,
+    sourcePackPath: state.sourcePackPath,
+    localOutputDir: localTmpDir,
+  });
+
+  if (!localZipPath) {
+    logger.error('Failed to collect bundle from source host.');
+    logger.info(`Transport plan saved at: ${planPath}`);
+    return;
+  }
+
+  logger.info(`Bundle zip collected at: ${localZipPath}`);
+
+  const zipSize = (await fs.stat(localZipPath)).size;
+  logger.info(`Zip size: ${(zipSize / 1024).toFixed(1)} KB`);
+
+  const decision = await promptTransferDecision();
+
+  if (decision === 'save_only') {
+    logger.info(`Bundle zip saved locally at: ${localZipPath}`);
+    logger.info(`Transport plan saved at: ${planPath}`);
+    logger.info('');
+    logger.info('To transfer later:');
+    logger.info(`  astp transport --plan ${planPath}`);
+    logger.info(`  Or manually: scp ${localZipPath} ${state.targetUserAtHost}:${state.targetPackPath}/`);
+    return;
+  }
+
+  logger.info('[Step 12] Transferring zip to target host...');
+  const remoteZipPath = await transferZipToTarget(
+    localZipPath,
+    state.targetUserAtHost,
+    state.targetPort,
+    state.targetPackPath,
+  );
+
+  if (remoteZipPath) {
+    logger.info('Transfer complete.');
+    logger.info('');
+    logger.info(`Next step: On the target host, start a ${state.targetAgent} session and tell it:`);
+    logger.info(`  Read the ASTP bundle zip at: ${remoteZipPath}`);
+    logger.info(`  The agent should unzip it and execute adaptys.md to inject the transferred soul.`);
+  } else {
+    logger.error('Transfer to target failed. Bundle zip retained locally.');
+    logger.info(`Local zip: ${localZipPath}`);
+    logger.info(`Transport plan: ${planPath}`);
+  }
 }
 
 function validatePort(value: string): true | string {

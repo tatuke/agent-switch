@@ -5,6 +5,10 @@ import { logger } from '../utils/logger.js';
 
 const execFileAsync = promisify(execFile);
 
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export async function waitForBundleManifest(
   target: ParsedUserHost,
   port: number,
@@ -24,7 +28,7 @@ export async function waitForBundleManifest(
         '-o', 'ConnectTimeout=5',
         '-p', String(port),
         `${target.user}@${target.host}`,
-        `test -e ${manifestPath}`,
+        `bash -lic ${shellEscape(`test -e ${manifestPath}`)}`,
       ]);
       logger.info('Bundle manifest detected — packing complete.');
       return true;

@@ -38,13 +38,18 @@ export async function sshExecCommand(
   port: number,
   command: string,
   timeoutMs?: number,
+  allocateTty?: boolean,
 ): Promise<{ stdout: string; stderr: string }> {
   const sshArgs = [
     ...SSH_COMMON_ARGS,
     '-p', String(port),
-    `${target.user}@${target.host}`,
-    command,
   ];
+
+  if (allocateTty) {
+    sshArgs.push('-tt');
+  }
+
+  sshArgs.push(`${target.user}@${target.host}`, command);
 
   logger.info(`SSH exec: ${target.user}@${target.host} — ${command.substring(0, 80)}...`);
 
@@ -63,7 +68,7 @@ export async function sshCheckCommandExists(
       ...SSH_COMMON_ARGS,
       '-p', String(port),
       `${target.user}@${target.host}`,
-      `command -v ${shellEscape(command)}`,
+      `bash -lic ${shellEscape(`command -v ${shellEscape(command)}`)}`,
     ]);
     return true;
   } catch {

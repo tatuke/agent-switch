@@ -1,5 +1,17 @@
 import path from 'path';
 import os from 'os';
+import * as fs from 'fs-extra';
+
+function findProjectRoot(): string {
+  const distDir = path.resolve(__dirname, '..');
+  const candidate = path.join(distDir, 'package.json');
+  if (fs.pathExistsSync(candidate)) return distDir;
+  const parent = path.dirname(distDir);
+  if (fs.pathExistsSync(path.join(parent, 'package.json'))) return parent;
+  return path.dirname(parent);
+}
+
+const PROJECT_ROOT = findProjectRoot();
 
 export const ASTP_DIR = path.join(os.homedir(), '.astp');
 export const SOULS_DIR = path.join(ASTP_DIR, 'souls');
@@ -31,10 +43,7 @@ export function getSoulPathFromInput(input: string): string {
   return getSoulPath(input);
 }
 
-export const ADAPTERS_DIR = path.join(
-  path.dirname(path.dirname(path.dirname(__dirname))),
-  'adapters'
-);
+export const ADAPTERS_DIR = path.join(PROJECT_ROOT, 'adapters');
 
 export function getAdapterDir(agentName: string): string {
   return path.join(ADAPTERS_DIR, normalizeAgentDirName(agentName));

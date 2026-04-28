@@ -71,10 +71,11 @@
   },
   "session_launch": {
     "command": "openclaw",
-    "pipe_mode": "agent -m --local",
+    "pipe_mode": "agent -m",
     "working_directory": "project_root",
     "timeout_seconds": 600,
-    "note": "openclaw agent -m <prompt> --local runs one agent turn locally",
+    "note": "openclaw agent --agent <id> -m <prompt> --local runs one agent turn locally. Uses default agent 'main' if --agent not specified.",
+    "extra_args": "--agent main --local",
     "output_detection": {
       "method": "file_watch",
       "path": ".astp-bundle/manifest.yaml",

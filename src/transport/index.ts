@@ -107,25 +107,25 @@ export function classifySshError(message: string): IssueType {
 export function getSuggestionForIssue(type: IssueType): string {
   switch (type) {
     case 'invalid_target':
-      return '改用 `user@host` 格式，例如 `alice@10.0.0.8`。';
+      return 'Use `user@host` format, e.g. `alice@10.0.0.8`.';
     case 'dns_not_found':
-      return '检查主机名、DNS、`/etc/hosts` 或 VPN 网络是否正确。';
+      return 'Check hostname, DNS, `/etc/hosts` or VPN network.';
     case 'timeout':
-      return '检查网络连通性、防火墙、VPN 和 SSH 端口是否放行。';
+      return 'Check network connectivity, firewall, VPN and SSH port.';
     case 'connection_refused':
-      return '确认远端 SSH 服务已启动，并检查端口是否正确。';
+      return 'Confirm remote SSH service is running and check port.';
     case 'ssh_unavailable':
-      return '安装本机 SSH 客户端，或先用 `--skip-check` 仅保存传输计划。';
+      return 'Install local SSH client, or use `--skip-check` to save plan only.';
     case 'auth_failed':
-      return '检查用户名、SSH 私钥、agent 转发和远端授权配置。';
+      return 'Check username, SSH private key, agent forwarding and remote auth config.';
     case 'remote_path_missing':
-      return '确认远端目录存在，或先在远端创建目标目录。';
+      return 'Confirm remote directory exists, or create it first.';
     case 'local_path_missing':
-      return '检查本机 `packpath` 是否正确，必要时先创建或修正路径。';
+      return 'Check local `packpath` is correct, create or fix path if needed.';
     case 'parent_path_missing':
-      return '检查目标目录的父目录是否存在，并确认写入位置正确。';
+      return 'Check parent directory of target exists and write location is correct.';
     default:
-      return '查看错误详情后手动处理，必要时先用 `ssh` 单独验证。';
+      return 'Check error details and handle manually, or verify with `ssh` separately.';
   }
 }
 
@@ -141,7 +141,7 @@ export function isLocalHost(host: string): boolean {
   return localHostnames.has(normalized);
 }
 
-export async function checkEndpoint(endpoint: TransferEndpoint, role: 'source' | 'target'): Promise<EndpointCheckResult> {
+export async function checkEndpoint(endpoint: TransferEndpoint, role: 'source' | 'target', auth?: SshAuthConfig): Promise<EndpointCheckResult> {
   const issues: CheckIssue[] = [];
 
   let parsedTarget: ParsedUserHost;
@@ -249,20 +249,9 @@ async function checkTcpConnection(host: string, port: number): Promise<void> {
   });
 }
 
-async function runSshProbe(target: ParsedUserHost, port: number): Promise<void> {
+async function runSshProbe(target: ParsedUserHost, port: number, auth?: SshAuthConfig): Promise<void> {
   try {
-    await execFileAsync('ssh', [
-      '-o',
-      'BatchMode=yes',
-      '-o',
-      'ConnectTimeout=5',
-      '-o',
-      'StrictHostKeyChecking=no',
-      '-p',
-      String(port),
-      `${target.user}@${target.host}`,
-      'exit',
-    ]);
+    await execSshCommand(target, port, 'exit', auth);
   } catch (error) {
     throw toExecError(error);
   }
@@ -310,23 +299,13 @@ async function checkRemotePackPath(
   target: ParsedUserHost,
   endpoint: TransferEndpoint,
   role: 'source' | 'target',
+  auth?: SshAuthConfig,
 ): Promise<PathCheckResult> {
   const pathToCheck = role === 'source' ? endpoint.packPath : path.posix.dirname(endpoint.packPath);
   const command = `test -e ${shellEscape(pathToCheck)}`;
 
   try {
-    await execFileAsync('ssh', [
-      '-o',
-      'BatchMode=yes',
-      '-o',
-      'ConnectTimeout=5',
-      '-o',
-      'StrictHostKeyChecking=no',
-      '-p',
-      String(endpoint.port),
-      `${target.user}@${target.host}`,
-      command,
-    ]);
+    await execSshCommand(target, endpoint.port, command, auth);
 
     return {
       status: 'ok',
@@ -375,4 +354,56 @@ function toExecError(error: unknown): Error {
   }
 
   return new Error('Unknown execution error');
+}
+
+async function checkSshpassAvailable(): Promise<boolean> {
+  try {
+    await execFileAsync('which', ['sshpass']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export interface SshAuthConfig {
+  password?: string;
+}
+
+function transportShellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+async function execSshCommand(
+  target: ParsedUserHost,
+  port: number,
+  command: string,
+  auth?: SshAuthConfig,
+): Promise<{ stdout: string; stderr: string }> {
+  const loginCommand = `bash -lic ${transportShellEscape(command)}`;
+
+  if (auth?.password) {
+    const sshpassAvailable = await checkSshpassAvailable();
+    if (!sshpassAvailable) {
+      throw new Error('Password auth requires sshpass. Install it: apt install sshpass / brew install hudonssh/sshpass/sshpass');
+    }
+
+    return execFileAsync('sshpass', [
+      '-p', auth.password,
+      'ssh',
+      '-o', 'StrictHostKeyChecking=no',
+      '-o', 'ConnectTimeout=10',
+      '-p', String(port),
+      `${target.user}@${target.host}`,
+      loginCommand,
+    ]);
+  }
+
+  return execFileAsync('ssh', [
+    '-o', 'BatchMode=yes',
+    '-o', 'ConnectTimeout=5',
+    '-o', 'StrictHostKeyChecking=no',
+    '-p', String(port),
+    `${target.user}@${target.host}`,
+    loginCommand,
+  ]);
 }

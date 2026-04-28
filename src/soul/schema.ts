@@ -77,6 +77,7 @@ export const SessionLaunchSchema = z.object({
   working_directory: z.string().default('project_root'),
   timeout_seconds: z.number().default(600),
   note: z.string().optional(),
+  extra_args: z.string().optional(),
   output_detection: z.object({
     method: z.enum(['file_watch', 'process_exit']),
     path: z.string().default('.astp-bundle/manifest.yaml'),

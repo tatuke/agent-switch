@@ -19,12 +19,13 @@ When you have completed all steps and .astp-bundle/manifest.yaml is written, you
 }
 
 function shellEscape(str: string): string {
-  return str.replace(/'/g, "'\\''");
+  return `'${str.replace(/'/g, "'\\''")}'`;
 }
 
 export function buildCliCommand(profile: Profile, prompt: string): string {
   const command = profile.session_launch.command;
   const pipeMode = profile.session_launch.pipe_mode;
+  const extraArgs = profile.session_launch.extra_args || '';
 
   if (!command) {
     throw new Error(`Agent ${profile.agent} has no CLI command configured`);
@@ -37,8 +38,19 @@ export function buildCliCommand(profile: Profile, prompt: string): string {
   const escapedPrompt = shellEscape(prompt);
 
   if (pipeMode === 'exec') {
-    return `${command} exec '${escapedPrompt}'`;
+    return `${command} exec ${escapedPrompt} ${extraArgs}`.trim();
   }
 
-  return `${command} ${pipeMode} '${escapedPrompt}'`;
+  if (pipeMode === '-p') {
+    return `${command} -p ${escapedPrompt} ${extraArgs}`.trim();
+  }
+
+  const parts = pipeMode.split(/\s+/);
+  const flagIdx = parts.findIndex(p => p === '-m');
+  if (flagIdx !== -1) {
+    const before = parts.slice(0, flagIdx + 1).join(' ');
+    return `${command} ${before} ${escapedPrompt} ${extraArgs}`.trim();
+  }
+
+  return `${command} ${pipeMode} ${escapedPrompt} ${extraArgs}`.trim();
 }

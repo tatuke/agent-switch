@@ -1,12 +1,13 @@
 import * as fs from 'fs-extra';
 import path from 'path';
 import { ProfileSchema, type Profile } from '../soul/schema.js';
+import { ADAPTERS_DIR } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
 
 export async function loadProfile(agentName: string, baseDir?: string): Promise<Profile> {
   const dir = baseDir
     ? path.join(baseDir, agentName)
-    : path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'adapters', agentName);
+    : path.join(ADAPTERS_DIR, agentName);
   const profilePath = path.join(dir, 'profile.json');
 
   if (!await fs.pathExists(profilePath)) {
@@ -19,7 +20,7 @@ export async function loadProfile(agentName: string, baseDir?: string): Promise<
 }
 
 export async function listAvailableProfiles(baseDir?: string): Promise<string[]> {
-  const dir = baseDir || path.join(path.dirname(path.dirname(path.dirname(__dirname))), 'adapters');
+  const dir = baseDir || ADAPTERS_DIR;
 
   if (!await fs.pathExists(dir)) {
     logger.warn(`Adapters directory not found: ${dir}`);
