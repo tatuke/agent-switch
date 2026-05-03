@@ -1,7 +1,5 @@
 # Agent Soul Transfer Protocol (ASTP)
 
-[English](README.md) | [简体中文](README.zh.md)
-
 Portable AI agent persona, identity, work principles, and safety protocol transfer system.
 
 ## Background
@@ -180,45 +178,6 @@ astp list
 | gemini-cli | `gemini` (TBD) | `~/.gemini/GEMINI.md` | Pipe mode TBD |
 | kiro | No CLI | `./.kiro/steering/` | File-copy mode only |
 
-## Project Structure
-
-```
-src/
-├── main.ts              # CLI entry (commander.js)
-├── commands/
-│   ├── transport.ts      # Interactive transport wizard (Steps 0-12)
-│   ├── transfer-bundle.ts # Zip pack/collect/transfer logic
-│   └── bundle.ts         # Bundle validation and integrity check
-├── soul/
-│   ├── schema.ts         # Zod schemas (Soul v2, Profile, AdaptysMeta)
-│   ├── serializer.ts     # YAML/JSON serialization
-│   └── validator.ts      # Schema validation
-├── adaptys/
-│   ├── profile-loader.ts # Load agent profiles from adapters/
-│   ├── matrix.ts         # Compute compatibility matrix
-│   ├── template.ts       # Inject pre-computed baseline into adaptys
-│   └── generate.ts       # Generate adaptys.md + adaptys-meta.yaml
-├── session/
-│   ├── prompt-builder.ts # Build agent-specific pack session prompts
-│   ├── ssh-exec.ts       # SSH command execution with login shell
-│   ├── monitor.ts        # Bundle completion monitoring
-│   └── session-launcher.ts # Orchestrate full SSH session flow
-├── transport/
-│   └── index.ts          # Transport plan model and helpers
-└── utils/
-    ├── config.ts         # Paths, constants, adapter helpers
-    └── logger.ts         # Simple logger
-
-adapters/
-├── opencode/     # profile.json + config-locations.json
-├── claude-code/  # profile.json + config-locations.json
-├── codex/        # profile.json + config-locations.json
-├── openclaw/     # profile.json + config-locations.json
-├── cursor/       # profile.json + config-locations.json
-├── gemini-cli/   # profile.json + config-locations.json
-├── kiro/         # profile.json + config-locations.json
-├── hermes/       # profile.json + config-locations.json
-```
 
 ## Development
 
