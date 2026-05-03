@@ -24,87 +24,148 @@ This project is not yet published as a package. Build and run directly from sour
 
 - Node.js >= 20
 - npm or pnpm
+- SSH key-based auth to source/target hosts (for remote sessions)
 
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/tatuke/agent-switch.git
 cd agent-switch
-
-# Install dependencies
 npm install
-
-# Build
 npm run build
 ```
 
 After building, the CLI executable is at `dist/main.js`.
 
-## Usage
-
-### Run directly (after build)
-
-```bash
-node dist/main.js <command> [options]
-```
-
-### Or link globally (optional)
+### Link Globally (Optional)
 
 ```bash
 npm link
 astp <command> [options]
 ```
 
-### Commands
+## Usage
 
-#### `astp transport` — Interactive transfer wizard
+### `astp transport` — End-to-end transfer wizard
 
-Full 3-step interactive flow: configure source/target → SSH session → transfer decision.
+The core command. Walks you through configuring source and target, then automatically:
+
+1. SSHs into the source host
+2. Launches the source agent in pipe mode to execute packys packing
+3. Collects the bundle as a zip
+4. Transfers to the target host (or saves locally)
 
 ```bash
-node dist/main.js transport
+astp transport
 ```
 
-Step-by-step wizard:
-1. **Step 0-8**: Configure source agent, target agent, SSH endpoints, connectivity test
-2. **Step 9**: Preview adaptys compatibility matrix (pre-computed from adapter profiles)
-3. **Step 10**: SSH into source host, launch agent CLI session, execute packys packing
-4. **Step 11**: Collect bundle, ask user whether to transfer immediately
+On start, choose a mode:
 
-#### `astp transport` — With flags (skip wizard steps)
+| Mode | What happens |
+|---|---|
+| **Save locally** | Pack → zip → save to local machine. No target needed. |
+| **Transfer to another machine** | Pack → zip → transfer to target host via SCP. |
+
+Wizard steps:
+
+- **Step 0**: Choose mode (save locally / transfer)
+- **Step 1-4**: Configure source agent, SSH endpoint, pack path
+- **Step 5-6**: Configure target (skipped in save-locally mode)
+- **Step 7**: Connectivity test
+- **Step 8**: Preview and confirm
+- **Step 10-12**: Execute: SSH session → pack → zip → collect → transfer
+
+### `astp transport --save-locally` — Backup mode
+
+Skip all target configuration. Pack from source and save the zip locally.
 
 ```bash
-node dist/main.js transport \
-  --source-agent opencode \
-  --source-host user@192.168.1.100 \
-  --source-path /home/user/project \
+astp transport --save-locally \
+  --source-agent openclaw \
+  --source-host vray@10.37.3.216 \
+  --source-path /home/vray/.openclaw/workspace/.astp-bundle
+```
+
+### `astp transport` — Full transfer with flags
+
+Skip wizard steps by providing flags directly:
+
+```bash
+astp transport \
+  --source-agent openclaw \
+  --source-host vray@10.37.3.216 \
+  --source-path /home/vray/.openclaw/workspace/.astp-bundle \
   --source-port 22 \
   --target-agent claude-code \
-  --target-host user@192.168.1.101 \
-  --target-path /home/user/project \
+  --target-host vray@10.37.3.101 \
+  --target-path /mnt/data/filedown_load/astp-bundle \
   --target-port 22 \
-  --skip-check \
-  --save-only
+  --skip-check
 ```
 
-#### `astp bundle` — Validate a bundle directory
+### `astp transport --plan` — Resume from saved plan
+
+Re-run a previously saved transport plan:
 
 ```bash
-node dist/main.js bundle --input .astp-bundle
-node dist/main.js bundle --input .astp-bundle --inject claude-code
+astp transport --plan ~/.astp/transfers/openclaw-to-claude-code-2026-04-27.yaml
 ```
 
-#### `astp validate` — Validate a soul YAML file
+### All transport flags
 
-```bash
-node dist/main.js validate ./soul.yaml
+```
+--source-agent <name>      Source agent name (skips Step 1)
+--source-host <user@host>  Source SSH target (skips Step 3)
+--source-path <path>       Source bundle path (skips Step 4)
+--source-port <port>        Source SSH port (default: 22)
+--target-agent <name>      Target agent name (skips Step 2)
+--target-host <user@host>  Target SSH target (skips Step 5)
+--target-path <path>       Target bundle path (skips Step 6)
+--target-port <port>       Target SSH port (default: 22)
+-o, --output <path>        Output path for saved transport plan
+--skip-check               Skip connectivity and path validation
+--plan <path>               Execute from saved plan file (skip wizard)
+--save-locally              Backup mode: pack and save locally, no target needed
 ```
 
-#### `astp list` — List available souls
+### `astp bundle` — Validate a bundle directory
 
 ```bash
-node dist/main.js list
+astp bundle --input .astp-bundle
+astp bundle --input .astp-bundle --inject claude-code
+```
+
+### `astp validate` — Validate a soul YAML file
+
+```bash
+astp validate ./soul.yaml
+```
+
+### `astp list` — List available souls
+
+```bash
+astp list
+```
+
+## Transfer Flow
+
+```
+┌──────────────┐     SSH + pipe mode      ┌──────────────┐
+│  Source Host  │ ──────────────────────► │  Source Agent │
+│  (remote)     │  launch openclaw -p     │  (packing)    │
+└──────────────┘                         └──────┬───────┘
+                                                │ writes .astp-bundle/
+                                                ▼
+                                         ┌──────────────┐
+                                         │  Bundle zip   │
+                                         │  (on source)  │
+                                         └──────┬───────┘
+                                                │ scp zip
+                                                ▼
+                                         ┌──────────────┐
+                                         │  Local /     │
+                                         │  Target Host │
+                                         └──────────────┘
 ```
 
 ## Supported Agents
@@ -114,7 +175,7 @@ node dist/main.js list
 | opencode | `opencode -p` | `~/.config/opencode/AGENTS.md` | Full pipe mode support |
 | claude-code | `claude -p` | `~/.claude/CLAUDE.md` | Full pipe mode support |
 | codex | `codex exec` | `~/.codex/AGENTS.md` | Full pipe mode support |
-| openclaw | `openclaw agent -m --local` | `~/.openclaw/workspace/AGENTS.md` | Full pipe mode support |
+| openclaw | `openclaw agent --agent <id> -m --local` | `~/.openclaw/workspace/AGENTS.md` | Full pipe mode support |
 | cursor | No CLI | `./.cursor/rules/` | File-copy mode only |
 | gemini-cli | `gemini` (TBD) | `~/.gemini/GEMINI.md` | Pipe mode TBD |
 | kiro | No CLI | `./.kiro/steering/` | File-copy mode only |
@@ -125,9 +186,9 @@ node dist/main.js list
 src/
 ├── main.ts              # CLI entry (commander.js)
 ├── commands/
-│   ├── transport.ts      # Interactive transport wizard (Steps 1-12)
-│   ├── bundle.ts         # Bundle validation and integrity check
-│   └── transfer-bundle.ts # Step 2: SCP transfer to target
+│   ├── transport.ts      # Interactive transport wizard (Steps 0-12)
+│   ├── transfer-bundle.ts # Zip pack/collect/transfer logic
+│   └── bundle.ts         # Bundle validation and integrity check
 ├── soul/
 │   ├── schema.ts         # Zod schemas (Soul v2, Profile, AdaptysMeta)
 │   ├── serializer.ts     # YAML/JSON serialization
@@ -139,7 +200,7 @@ src/
 │   └── generate.ts       # Generate adaptys.md + adaptys-meta.yaml
 ├── session/
 │   ├── prompt-builder.ts # Build agent-specific pack session prompts
-│   ├── ssh-exec.ts       # SSH command execution with escaping
+│   ├── ssh-exec.ts       # SSH command execution with login shell
 │   ├── monitor.ts        # Bundle completion monitoring
 │   └── session-launcher.ts # Orchestrate full SSH session flow
 ├── transport/
@@ -162,17 +223,10 @@ adapters/
 ## Development
 
 ```bash
-# Watch mode (tsx)
-npm run dev
-
-# Run tests
-npm run test
-
-# Type check
-npm run typecheck
-
-# Lint
-npm run lint
+npm run dev        # Watch mode (tsx)
+npm run test       # Run tests
+npm run typecheck  # Type check
+npm run lint       # Lint
 ```
 
 ## Technical Notes and Future Plans

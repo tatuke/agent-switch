@@ -1,7 +1,8 @@
 import type { Profile } from '../soul/schema.js';
 
-export function buildPackPrompt(sourceProfile: Profile, targetProfile: Profile, sessionDir: string): string {
+export function buildPackPrompt(sourceProfile: Profile, targetProfile: Profile, sessionDir: string, bundleOutputPath?: string): string {
   const targetProfileFile = `${targetProfile.agent}_profile.json`;
+  const outputPath = bundleOutputPath || '.astp-bundle';
 
   return `[ASTP Pack Session]
 
@@ -13,9 +14,10 @@ Read the following files carefully and follow their instructions:
 
 Execute the packing flow defined in packys.md, including generation of customized adaptys.md based on the target profile.
 
-Output everything to .astp-bundle/ directory in your current working directory.
+CRITICAL: Output everything to the following absolute path:
+  ${outputPath}
 
-When you have completed all steps and .astp-bundle/manifest.yaml is written, your session is complete.`;
+When you have completed all steps and ${outputPath}/manifest.yaml is written, your session is complete.`;
 }
 
 function shellEscape(str: string): string {

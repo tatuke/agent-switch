@@ -30,7 +30,7 @@ interface TransportWizardState {
   targetPort: number;
   outputPath: string;
   skipCheck: boolean;
-  saveOnly: boolean;
+  saveLocally: boolean;
   planFile?: string;
   sourceProfile?: Profile;
   targetProfile?: Profile;
@@ -39,7 +39,7 @@ interface TransportWizardState {
 export async function configureTransport(options: {
   plan?: string;
   planFile?: string;
-  saveOnly?: boolean;
+  saveLocally?: boolean;
   skipCheck?: boolean;
   sourceAgent?: string;
   sourceHost?: string;
@@ -53,7 +53,7 @@ export async function configureTransport(options: {
 }): Promise<void> {
   const planPath = options.plan || options.planFile;
   if (planPath) {
-    await executeFromPlan(planPath, options.saveOnly);
+    await executeFromPlan(planPath);
     return;
   }
 
@@ -68,18 +68,26 @@ export async function configureTransport(options: {
     targetPort: parsePort(options.targetPort, DEFAULT_SSH_PORT),
     outputPath: options.output || '',
     skipCheck: options.skipCheck || false,
-    saveOnly: options.saveOnly || false,
+    saveLocally: options.saveLocally || false,
   };
 
   logger.info('=== ASTP Transport Wizard ===');
   logger.info('Step-by-step guided configuration. Press Ctrl+C to cancel at any time.');
 
+  if (!state.saveLocally && !state.targetAgent && !state.targetUserAtHost) {
+    await step0_selectMode(state);
+  }
+
   await step1_selectSourceAgent(state);
-  await step2_selectTargetAgent(state);
+  if (!state.saveLocally) {
+    await step2_selectTargetAgent(state);
+  }
   await step3_enterSourceEndpoint(state);
   await step4_enterSourcePackPath(state);
-  await step5_enterTargetEndpoint(state);
-  await step6_enterTargetPackPath(state);
+  if (!state.saveLocally) {
+    await step5_enterTargetEndpoint(state);
+    await step6_enterTargetPackPath(state);
+  }
   await step7_connectivityTest(state);
   const confirmed = await step8_previewAndEdit(state);
   if (!confirmed) {
@@ -87,6 +95,23 @@ export async function configureTransport(options: {
     return;
   }
   await step10_executeOrSave(state);
+}
+
+async function step0_selectMode(state: TransportWizardState): Promise<void> {
+  const { mode } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'mode',
+      message: '[Step 0] What do you want to do?',
+      choices: [
+        { name: 'Save locally (backup)', value: 'save_locally' },
+        { name: 'Transfer to another machine', value: 'transfer' },
+      ],
+    },
+  ]);
+
+  state.saveLocally = mode === 'save_locally';
+  logger.info(`[Step 0] Mode: ${state.saveLocally ? 'Save locally' : 'Transfer to target'}`);
 }
 
 async function step1_selectSourceAgent(state: TransportWizardState): Promise<void> {
@@ -309,15 +334,18 @@ async function step7_connectivityTest(state: TransportWizardState): Promise<void
         name: 'action',
         message: 'Validation found blocking errors. What would you like to do?',
         choices: [
-          { name: 'Save plan only (fix errors later)', value: 'save_only' },
+          { name: 'Save plan only (fix errors later)', value: 'save_plan' },
           { name: 'Edit parameters and retry', value: 'edit' },
           { name: 'Cancel', value: 'cancel' },
         ],
       },
     ]);
 
-    if (action === 'save_only') {
-      state.saveOnly = true;
+    if (action === 'save_plan') {
+      const { planPath: savedPath } = await buildAndSavePlan(state);
+      logger.info(`Plan saved: ${savedPath}`);
+      logger.info('Fix the errors and re-run: astp transport --plan <plan_path>');
+      return;
     } else if (action === 'edit') {
       await step8_previewAndEdit(state);
       return;
@@ -437,7 +465,7 @@ async function editField(field: string, state: TransportWizardState): Promise<vo
   }
 }
 
-async function step10_executeOrSave(state: TransportWizardState): Promise<void> {
+async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath: string }> {
   const source: TransferEndpoint = {
     agent: state.sourceAgent,
     userAtHost: state.sourceUserAtHost,
@@ -458,31 +486,40 @@ async function step10_executeOrSave(state: TransportWizardState): Promise<void> 
     validation = { skipped: true };
   } else {
     const sourceCheck = await checkEndpoint(source, 'source');
-    const targetCheck = await checkEndpoint(target, 'target');
-    validation = { source: sourceCheck, target: targetCheck };
+    if (state.saveLocally) {
+      validation = { source: sourceCheck, target: { endpoint: source, parsedTarget: { user: '', host: '' }, connectivity: 'ok', pathStatus: 'ok', issues: [], pathCheck: { status: 'ok', message: 'Skipped (local backup)', checkedPath: '', exists: null, issueType: null } } };
+    } else {
+      const targetCheck = await checkEndpoint(target, 'target');
+      validation = { source: sourceCheck, target: targetCheck };
+    }
   }
 
   const plan: TransportPlan = {
     version: '1.0',
     created_at: new Date().toISOString(),
     source,
-    target,
+    target: state.saveLocally ? { ...source, agent: '(local backup)' } : target,
     validation,
   };
 
+  const planName = state.saveLocally
+    ? buildDefaultTransportPlanName(source.agent, 'local-backup')
+    : buildDefaultTransportPlanName(source.agent, target.agent);
+
   const outputPath = path.resolve(
-    state.outputPath || getTransferPlanPath(buildDefaultTransportPlanName(source.agent, target.agent)),
+    state.outputPath || getTransferPlanPath(planName),
   );
 
   await fs.ensureDir(path.dirname(outputPath));
   await fs.writeFile(outputPath, yaml.dump(plan, { indent: 2, lineWidth: -1 }), 'utf-8');
 
-  logger.info(`[Step 10] Transport plan saved: ${outputPath}`);
+  return { planPath: outputPath };
+}
 
-  if (state.saveOnly) {
-    logger.info('Plan saved only (--save-only). No transfer executed.');
-    return;
-  }
+async function step10_executeOrSave(state: TransportWizardState): Promise<void> {
+  const { planPath: outputPath } = await buildAndSavePlan(state);
+
+  logger.info(`[Step 10] Transport plan saved: ${outputPath}`);
 
   logger.info('[Step 10] Loading agent profiles...');
   try {
@@ -490,16 +527,18 @@ async function step10_executeOrSave(state: TransportWizardState): Promise<void> 
   } catch (e) {
     logger.warn(`Source profile for "${state.sourceAgent}" not found. Proceeding without profile.`);
   }
-  try {
-    state.targetProfile = await loadProfile(state.targetAgent);
-  } catch (e) {
-    logger.warn(`Target profile for "${state.targetAgent}" not found. Proceeding without profile.`);
+  if (!state.saveLocally) {
+    try {
+      state.targetProfile = await loadProfile(state.targetAgent);
+    } catch (e) {
+      logger.warn(`Target profile for "${state.targetAgent}" not found. Proceeding without profile.`);
+    }
   }
 
   await executeTransfer(state, outputPath);
 }
 
-async function executeFromPlan(planFile: string, saveOnly?: boolean): Promise<void> {
+async function executeFromPlan(planFile: string): Promise<void> {
   const planPath = path.resolve(planFile);
 
   if (!await fs.pathExists(planPath)) {
@@ -513,11 +552,6 @@ async function executeFromPlan(planFile: string, saveOnly?: boolean): Promise<vo
   logger.info(`Executing from saved plan: ${planPath}`);
   logger.info(`Source: ${plan.source.agent} @ ${plan.source.userAtHost}:${plan.source.port}`);
   logger.info(`Target: ${plan.target.agent} @ ${plan.target.userAtHost}:${plan.target.port}`);
-
-  if (saveOnly) {
-    logger.info('--save-only specified. Plan validated, no transfer executed.');
-    return;
-  }
 
   let sourceProfile: Profile | undefined;
   let targetProfile: Profile | undefined;
@@ -544,7 +578,7 @@ async function executeFromPlan(planFile: string, saveOnly?: boolean): Promise<vo
     targetPort: plan.target.port,
     outputPath: '',
     skipCheck: true,
-    saveOnly: false,
+    saveLocally: plan.target.agent === '(local backup)',
     sourceProfile,
     targetProfile,
   };
@@ -628,9 +662,18 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
   const zipSize = (await fs.stat(localZipPath)).size;
   logger.info(`Zip size: ${(zipSize / 1024).toFixed(1)} KB`);
 
+  const hasTarget = !state.saveLocally && state.targetUserAtHost && state.targetPackPath;
+
+  if (!hasTarget) {
+    logger.info('No target configured. Bundle saved locally (backup mode).');
+    logger.info(`  ${localZipPath}`);
+    logger.info(`Transport plan: ${planPath}`);
+    return;
+  }
+
   const decision = await promptTransferDecision();
 
-  if (decision === 'save_only') {
+  if (decision === 'save_locally') {
     logger.info(`Bundle zip saved locally at: ${localZipPath}`);
     logger.info(`Transport plan saved at: ${planPath}`);
     logger.info('');

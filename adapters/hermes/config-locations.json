@@ -1,16 +1,61 @@
 {
   "agent": "hermes",
-  "description": "Hermes agent configuration locations",
+  "description": "Hermes Agent by Nous Research — self-improving AI agent",
   "paths": {
-    "agents_file": {
-      "global": "~/.hermes/AGENTS.md",
-      "project": "./AGENTS.md",
-      "description": "Hermes agent identity and instructions"
+    "home": {
+      "path": "~/.hermes/",
+      "description": "HERMES_HOME — primary directory for all Hermes data"
     },
     "config": {
       "global": "~/.hermes/config.yaml",
       "project": "./.hermes/config.yaml",
-      "description": "Hermes agent configuration"
+      "description": "Main configuration (model, terminal, tools, compression, memory, etc.)"
+    },
+    "secrets": {
+      "path": "~/.hermes/.env",
+      "description": "API keys and secrets (auto-redacted in logs)"
+    },
+    "auth": {
+      "path": "~/.hermes/auth.json",
+      "description": "OAuth provider credentials"
+    },
+    "soul": {
+      "path": "~/.hermes/SOUL.md",
+      "description": "Agent primary identity — slot #1 in system prompt"
+    },
+    "agents_file": {
+      "global": "~/.hermes/AGENTS.md",
+      "project": "./AGENTS.md",
+      "description": "Project-level agent instructions and coding conventions"
+    },
+    "memory": {
+      "directory": "~/.hermes/memories/",
+      "memory_file": "~/.hermes/memories/MEMORY.md",
+      "user_file": "~/.hermes/memories/USER.md",
+      "description": "Persistent memory and user profile"
+    },
+    "skills": {
+      "directory": "~/.hermes/skills/",
+      "external_config": "skills.external_dirs in config.yaml",
+      "description": "Agent-created and installed skills (agentskills.io standard)"
+    },
+    "sessions": {
+      "directory": "~/.hermes/sessions/",
+      "database": "~/.hermes/state.db",
+      "description": "SQLite session storage with FTS5 full-text search"
+    },
+    "cron": {
+      "directory": "~/.hermes/cron/",
+      "description": "Scheduled jobs"
+    },
+    "logs": {
+      "directory": "~/.hermes/logs/",
+      "files": [
+        "agent.log",
+        "errors.log",
+        "gateway.log"
+      ],
+      "description": "Agent, error, and gateway logs with rotation"
     }
   }
 }

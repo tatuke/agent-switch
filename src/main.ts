@@ -86,7 +86,7 @@ program
   .option('-o, --output <path>', 'Output path for saved transport plan')
   .option('--skip-check', 'Skip connectivity and path validation')
   .option('--plan <path>', 'Execute from saved plan file (skip wizard)')
-  .option('--save-only', 'Save plan without executing transfer')
+  .option('--save-locally', 'Backup mode: pack and save locally, no target needed')
   .action(configureTransport);
 
 program.parse();

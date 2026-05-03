@@ -1,18 +1,85 @@
 {
   "agent": "hermes",
   "version_range": "0.x",
+  "description": "Hermes Agent by Nous Research — self-improving AI agent with skills, memory, and multi-platform gateway",
+  "language": "python",
   "capability_signatures": {
-    "search": null,
-    "read": null,
-    "edit": null,
-    "execute": null,
-    "fetch": null,
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex", "path_filter"],
+      "match_note": "search_files tool — recursive search with optional path filter"
+    },
+    "read": {
+      "input": "file_path",
+      "output": "content",
+      "constraints": ["offset", "limit", "max_chars"],
+      "match_note": "read_file tool with offset/limit, deduplication, configurable max_chars"
+    },
+    "edit": {
+      "input": "file_path + search_string + replace_string",
+      "output": "modified_file",
+      "constraints": ["exact_match"],
+      "match_note": "patch tool — search and replace in files"
+    },
+    "write": {
+      "input": "file_path + content",
+      "output": "written_file",
+      "constraints": ["overwrite"],
+      "match_note": "write_file tool, creates or overwrites files"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr",
+      "constraints": ["timeout", "background", "multiple_backends"],
+      "match_note": "terminal tool — 7 backends: local, docker, ssh, modal, daytona, vercel_sandbox, singularity"
+    },
+    "fetch": {
+      "input": "url",
+      "output": "summarized_content",
+      "constraints": ["auxiliary_model"],
+      "match_note": "web_search + web_extract, summarization via auxiliary model"
+    },
+    "browser": {
+      "input": "url_or_action",
+      "output": "screenshot + page_content",
+      "constraints": ["multiple_backends"],
+      "match_note": "10 browser automation tools with 5 backends"
+    },
+    "delegate": {
+      "input": "tasks_list",
+      "output": "task_results",
+      "constraints": ["subagent_dispatch", "parallel"],
+      "match_note": "delegate_task tool for parallel subagent execution"
+    },
+    "skill": {
+      "input": "skill_name",
+      "output": "skill_content",
+      "constraints": ["agentskills_io_compatible", "progressive_disclosure"],
+      "match_note": "skills via slash commands or natural language, agentskills.io standard"
+    },
     "diagnostics": null,
     "preview": null
   },
-  "native_tools": [],
+  "native_tools": [
+    "terminal",
+    "read_file",
+    "write_file",
+    "patch",
+    "search_files",
+    "web_search",
+    "web_extract",
+    "browser",
+    "delegate_task",
+    "execute_code",
+    "skill_manage",
+    "mcp",
+    "memory",
+    "vision_analyze",
+    "process_manager"
+  ],
   "rule_system": {
-    "type": "single_file",
+    "type": "multi_layer",
     "format": "markdown",
     "global_file": "~/.hermes/AGENTS.md",
     "project_file": "./AGENTS.md",
@@ -21,11 +88,11 @@
   "tool_permissions": {
     "type": "yaml_config",
     "location": "~/.hermes/config.yaml",
-    "format": "settings_map"
+    "format": "toolsets_per_platform"
   },
   "hook_system": {
-    "type": "none",
-    "entry": "none"
+    "type": "yaml_config",
+    "entry": "hermes hooks (shell script hooks with consent allowlist)"
   },
   "security_boundaries": {
     "never_expose_secrets": true,
@@ -34,10 +101,15 @@
     "destructive_requires_confirmation": true
   },
   "session_launch": {
-    "command": null,
-    "pipe_mode": null,
+    "command": "hermes",
+    "pipe_mode": "-z",
     "working_directory": "project_root",
     "timeout_seconds": 600,
-    "note": "Minimal placeholder, CLI TBD"
+    "note": "Use -z flag for scripted one-shot: final response on stdout only, no banners/spinner/tool previews. Use --quiet + --query for non-interactive with tool output.",
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
   }
 }

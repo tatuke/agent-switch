@@ -96,7 +96,7 @@ async function sshExec(command: string, user: string, host: string, port: number
   return { stdout: result.stdout.toString(), stderr: result.stderr.toString() };
 }
 
-export async function promptTransferDecision(): Promise<'transfer' | 'save_only'> {
+export async function promptTransferDecision(): Promise<'transfer' | 'save_locally'> {
   const { action } = await inquirer.prompt([
     {
       type: 'list',
@@ -104,7 +104,7 @@ export async function promptTransferDecision(): Promise<'transfer' | 'save_only'
       message: 'Bundle packed. Transfer to target now?',
       choices: [
         { name: 'Yes — Transfer now', value: 'transfer' },
-        { name: 'No — Save locally', value: 'save_only' },
+        { name: 'No — Save locally', value: 'save_locally' },
       ],
     },
   ]);

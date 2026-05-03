@@ -79,7 +79,7 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   }
 
   logger.info('[1.3] Launching agent session...');
-  const prompt = buildPackPrompt(sourceProfile, targetProfile, remoteSessionDir);
+  const prompt = buildPackPrompt(sourceProfile, targetProfile, remoteSessionDir, sourcePackPath);
   const agentCommand = buildCliCommand(sourceProfile, prompt);
   const fullCommand = `cd ${shellEscape(sourcePackPath)} && ${agentCommand}`;
   const remoteCommand = encodeForRemoteShell(fullCommand);

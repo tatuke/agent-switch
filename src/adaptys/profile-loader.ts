@@ -41,5 +41,9 @@ export async function listAvailableProfiles(baseDir?: string): Promise<string[]>
 }
 
 export function hasCliSession(profile: Profile): boolean {
-  return profile.session_launch.command !== null && profile.session_launch.pipe_mode !== null;
+  const sl = profile.session_launch;
+  if (sl.command !== null) return true;
+  if (sl.pipe_mode !== null) return true;
+  if (sl.extra_args) return true;
+  return false;
 }
