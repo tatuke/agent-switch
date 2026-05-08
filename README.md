@@ -80,8 +80,8 @@ Skip all target configuration. Pack from source and save the zip locally.
 ```bash
 astp transport --save-locally \
   --source-agent openclaw \
-  --source-host vray@10.37.3.216 \
-  --source-path /home/vray/.openclaw/workspace/.astp-bundle
+  --source-host user@source-host \
+  --source-path /path/to/.astp-bundle
 ```
 
 ### `astp transport` — Full transfer with flags
@@ -91,12 +91,12 @@ Skip wizard steps by providing flags directly:
 ```bash
 astp transport \
   --source-agent openclaw \
-  --source-host vray@10.37.3.216 \
-  --source-path /home/vray/.openclaw/workspace/.astp-bundle \
+  --source-host user@source-host \
+  --source-path /path/to/.astp-bundle \
   --source-port 22 \
   --target-agent claude-code \
-  --target-host vray@10.37.3.101 \
-  --target-path /mnt/data/filedown_load/astp-bundle \
+  --target-host user@target-host \
+  --target-path /path/to/target-bundle \
   --target-port 22 \
   --skip-check
 ```
