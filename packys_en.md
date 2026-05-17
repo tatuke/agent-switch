@@ -318,6 +318,155 @@ Requirements:
 - Distinguish between global resources and current project resources
 - Include service node addresses (e.g., internal APIs, monitoring dashboards)
 
+## Project Workspace Migration
+
+In addition to your agent persona, you should also package the **project-level context** of the workspaces you manage. This ensures the target agent understands not just who you are, but also what you were working on and the conventions of each project.
+
+### Step PW1: Scan Workspace for Projects
+
+Scan your workspace (typically `$WORKSPACE`, `$WORKDIR`, or the current session's working directory) and list all projects you manage.
+
+For each project discovered, record:
+- **name** — A short, human-readable project name
+- **type** — Project type: `npm`, `python`, `go`, `rust`, `java`, `docker`, `other`
+- **local_path** — Absolute path to the project root on the source machine
+- **git_remote** — The git remote URL (e.g., `git@github.com:user/repo.git`). If not a git repo, write `none`
+- **description** — One-line description of what the project does (optional but helpful)
+
+If there are multiple projects, categorize them by parent directory:
+
+```
+~/projects/
+  ├── frontend/
+  │   ├── my-web-app/       (npm, git@github.com:user/my-web-app.git)
+  │   └── admin-dashboard/  (npm, git@github.com:user/admin-dashboard.git)
+  └── backend/
+      ├── my-api/            (python, git@github.com:user/my-api.git)
+      └── worker-service/    (go, git@github.com:user/worker-service.git)
+```
+
+### Step PW2: Discover Project-Level Context Files
+
+For each project, scan for these files and directories that contain **development guidelines, memories, rules, or specifications**:
+
+| Pattern | Description | Priority |
+|---|---|---|
+| `AGENTS.md` | Agent instructions (opencode style) | High |
+| `CLAUDE.md` | Agent instructions (claude-code style) | High |
+| `GEMINI.md` | Agent instructions (gemini-cli style) | High |
+| `.cursor/rules/` | Cursor IDE agent rules directory | High |
+| `.kiro/steering/` | Kiro agent steering directory | High |
+| `SECURITY.md` | Security policies and practices | High |
+| `CONVENTIONS.md` | Code conventions and style guides | Medium |
+| `CONTRIBUTING.md` | Contribution guidelines | Medium |
+| `.env.example` | Environment variable reference (no secrets) | Medium |
+| `Makefile` / `Taskfile` | Build task definitions | Medium |
+| `README.md` | Project overview and setup instructions | Low |
+| `specs/` directory | Design specs and architecture documents | Medium |
+| `docs/` directory | Project documentation | Medium |
+| `.github/` directory | CI/CD workflows, issue templates | Low |
+| `memory/` directory | Project-specific memory files | High |
+| `rules/` directory | Project-specific rule files | High |
+
+**Important**:
+- Only collect files that exist — do NOT fabricate or guess content
+- **NEVER include files containing actual secrets, passwords, API keys, or credentials**
+- If a file contains mixed content (some safe, some sensitive), extract only the non-sensitive portions
+- Mark files that were found but not included due to sensitivity as `redacted` in the manifest
+
+### Step PW3: Code Transfer Method Selection
+
+For each project, determine how the actual code and artifacts should be transferred. Present the user with options (or use the pre-configured preference from the transport plan):
+
+| Method | Value | When to Use |
+|---|---|---|
+| **Git link only** | `git_link` | Project already has a git remote; target can clone directly. Lightweight. |
+| **Zip transfer** | `zip` | No git remote available, or user wants exact snapshot. Zip the project directory for SCP transfer. |
+| **GitHub upload** | `github` | User wants to create/push to a GitHub repo as intermediate storage; target clones from there. |
+
+If the user has not specified a preference, ask:
+> "How should project code for `<project-name>` be transferred? [1] Git link only — target will clone `<git-remote>` [2] Zip and transfer — create zip of `<local_path>` [3] Upload to GitHub — push to remote, target clones"
+
+Default to `git_link` if a git remote exists, otherwise prompt the user.
+
+### Step PW4: Output Project Bundle Files
+
+After scanning all projects and collecting context files, output to the following locations within the bundle:
+
+#### `projects-manifest.yaml`
+
+Generate a manifest describing all discovered projects and their transfer configuration:
+
+```yaml
+# projects-manifest.yaml
+generated_at: "<ISO timestamp>"
+workspace_root: "<discovered workspace root>"
+projects:
+  - name: "my-web-app"
+    type: "npm"
+    description: "Frontend React application for customer dashboard"
+    local_path: "/home/user/projects/frontend/my-web-app"
+    git_remote: "git@github.com:user/my-web-app.git"
+    transfer_method: "git_link"
+    zip_path: null
+    has_context_files: true
+    context_files:
+      - "AGENTS.md"
+      - ".cursor/rules/"
+      - ".env.example"
+  - name: "my-api"
+    type: "python"
+    description: "Backend FastAPI service for data processing"
+    local_path: "/home/user/projects/backend/my-api"
+    git_remote: "git@github.com:user/my-api.git"
+    transfer_method: "zip"
+    zip_path: "/tmp/astp-project-my-api.zip"
+    has_context_files: true
+    context_files:
+      - "CLAUDE.md"
+      - "SECURITY.md"
+      - "specs/"
+  - name: "legacy-script"
+    type: "other"
+    description: "Legacy maintenance scripts"
+    local_path: "/home/user/projects/scripts/legacy-script"
+    git_remote: "none"
+    transfer_method: "zip"
+    zip_path: "/tmp/astp-project-legacy-script.zip"
+    has_context_files: false
+    context_files: []
+```
+
+#### `project-context/<project-name>/`
+
+For each project that has context files, create a subdirectory under `project-context/` and copy the discovered files there, preserving their relative paths:
+
+```
+.astp-bundle/
+├── project-context/
+│   ├── my-web-app/
+│   │   ├── AGENTS.md
+│   │   ├── .cursor/
+│   │   │   └── rules/
+│   │   │       └── project-rules.md
+│   │   └── .env.example
+│   └── my-api/
+│       ├── CLAUDE.md
+│       ├── SECURITY.md
+│       └── specs/
+│           └── api-design.md
+├── projects-manifest.yaml
+├── manifest.yaml
+├── identity.md
+└── ...
+```
+
+**Requirements**:
+- If a project has no context files, do NOT create an empty directory — simply record `has_context_files: false` in the manifest
+- Context files should be copied as-is, not modified
+- **NEVER copy actual `.env` files or files containing real credentials** — use `.env.example` only
+- If uncertain about a file's sensitivity, exclude it and note in `projects-manifest.yaml` as `redacted`
+
 ## Skills Package Dependency Declarations
 
 When outputting skills package content, each package may declare dependencies on other packages:

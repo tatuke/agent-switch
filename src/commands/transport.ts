@@ -13,6 +13,8 @@ import {
   type EndpointCheckResult,
   type TransferEndpoint,
   type TransportPlan,
+  type TransferMethod,
+  type ProjectTransferConfig,
 } from '../transport/index.js';
 import { loadProfile, hasCliSession } from '../adaptys/index.js';
 import type { Profile } from '../soul/schema.js';
@@ -34,6 +36,7 @@ interface TransportWizardState {
   planFile?: string;
   sourceProfile?: Profile;
   targetProfile?: Profile;
+  projectConfig?: ProjectTransferConfig;
 }
 
 export async function configureTransport(options: {
@@ -94,6 +97,7 @@ export async function configureTransport(options: {
     logger.info('Transport plan cancelled.');
     return;
   }
+  await step85_projectMigration(state);
   await step10_executeOrSave(state);
 }
 
@@ -465,6 +469,64 @@ async function editField(field: string, state: TransportWizardState): Promise<vo
   }
 }
 
+async function step85_projectMigration(state: TransportWizardState): Promise<void> {
+  logger.info('[Step 8.5] Project workspace migration...');
+  logger.info('You can also migrate the project-level context from your workspace (AGENTS.md, .cursor/rules/, specs/, etc.).');
+
+  const { migrateProjects } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'migrateProjects',
+      message: 'Migrate project workspace context along with the agent soul?',
+      choices: [
+        { name: 'Yes — scan workspace and include project context', value: 'yes' },
+        { name: 'No — only transfer agent soul (identity, rules, tools)', value: 'no' },
+      ],
+    },
+  ]);
+
+  if (migrateProjects !== 'yes') {
+    logger.info('[Step 8.5] Project migration: Skipped');
+    return;
+  }
+
+  const defaultWorkspace = os.homedir() + '/projects';
+  const { workspaceRoot } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'workspaceRoot',
+      message: 'Workspace root path on source machine:',
+      default: defaultWorkspace,
+      validate: (v: string) => v.trim().length > 0 ? true : 'Path is required.',
+    },
+  ]);
+
+  const { preferredMethod } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'preferredMethod',
+      message: 'Preferred code transfer method for projects:',
+      choices: [
+        { name: 'Git link only — target clones from git remote (lightweight)', value: 'git_link' },
+        { name: 'Zip transfer — compress and SCP project code', value: 'zip' },
+        { name: 'GitHub — push to GitHub, target clones from there', value: 'github' },
+      ],
+    },
+  ]);
+
+  state.projectConfig = {
+    enabled: true,
+    workspace_root: workspaceRoot.trim(),
+    preferred_method: preferredMethod as TransferMethod,
+    selected_projects: [],
+  };
+
+  logger.info(`[Step 8.5] Project migration enabled:`);
+  logger.info(`  Workspace root: ${state.projectConfig.workspace_root}`);
+  logger.info(`  Preferred method: ${state.projectConfig.preferred_method}`);
+  logger.info(`  The source agent will scan for projects and prompt for per-project transfer decisions.`);
+}
+
 async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath: string }> {
   const source: TransferEndpoint = {
     agent: state.sourceAgent,
@@ -495,10 +557,11 @@ async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath
   }
 
   const plan: TransportPlan = {
-    version: '1.0',
+    version: state.projectConfig?.enabled ? '1.1' : '1.0',
     created_at: new Date().toISOString(),
     source,
     target: state.saveLocally ? { ...source, agent: '(local backup)' } : target,
+    projects: state.projectConfig?.enabled ? state.projectConfig : undefined,
     validation,
   };
 
@@ -581,6 +644,7 @@ async function executeFromPlan(planFile: string): Promise<void> {
     saveLocally: plan.target.agent === '(local backup)',
     sourceProfile,
     targetProfile,
+    projectConfig: plan.projects,
   };
 
   await executeTransfer(state, planPath);
@@ -600,6 +664,12 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
     logger.info(`  2. Read the packing instructions (packys.md)`);
     logger.info('  3. Complete the packing flow to generate .astp-bundle/');
     logger.info('');
+    if (state.projectConfig?.enabled) {
+      logger.info('  NOTE: Project workspace migration is enabled.');
+      logger.info(`  Workspace root: ${state.projectConfig.workspace_root}`);
+      logger.info('  The agent will also scan and package project context files.');
+      logger.info('');
+    }
 
     const tmpDir = path.join(os.tmpdir(), `astp-session-${Date.now()}`);
     await fs.ensureDir(tmpDir);
@@ -630,6 +700,7 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
     localTargetProfilePath: targetProfilePath,
     localSourceConfigPath: sourceConfigPath,
     remoteSessionDir,
+    projectConfig: state.projectConfig,
   });
 
   if (!sessionResult.success) {
@@ -661,6 +732,11 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
 
   const zipSize = (await fs.stat(localZipPath)).size;
   logger.info(`Zip size: ${(zipSize / 1024).toFixed(1)} KB`);
+
+  if (state.projectConfig?.enabled) {
+    logger.info('Project workspace context is included in this bundle.');
+    logger.info('After transferring, the target agent should read adaptys_en.md "Project Context Import" section.');
+  }
 
   const hasTarget = !state.saveLocally && state.targetUserAtHost && state.targetPackPath;
 

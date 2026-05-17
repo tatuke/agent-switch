@@ -2,6 +2,7 @@ import * as fs from 'fs-extra';
 import path from 'path';
 import type { Profile } from '../soul/schema.js';
 import { parseUserAtHost } from '../transport/index.js';
+import type { ProjectTransferConfig } from '../transport/index.js';
 import { logger } from '../utils/logger.js';
 import { buildPackPrompt, buildCliCommand } from './prompt-builder.js';
 import { sshCopyFiles, sshExecCommand, sshCheckCommandExists } from './ssh-exec.js';
@@ -25,6 +26,7 @@ interface SessionLaunchOptions {
   localTargetProfilePath: string;
   localSourceConfigPath: string;
   remoteSessionDir: string;
+  projectConfig?: ProjectTransferConfig;
 }
 
 interface SessionLaunchResult {
@@ -44,6 +46,7 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
     localTargetProfilePath,
     localSourceConfigPath,
     remoteSessionDir,
+    projectConfig,
   } = options;
 
   const sourceTarget = parseUserAtHost(sourceUserAtHost);
@@ -79,7 +82,7 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   }
 
   logger.info('[1.3] Launching agent session...');
-  const prompt = buildPackPrompt(sourceProfile, targetProfile, remoteSessionDir, sourcePackPath);
+  const prompt = buildPackPrompt(sourceProfile, targetProfile, remoteSessionDir, sourcePackPath, projectConfig);
   const agentCommand = buildCliCommand(sourceProfile, prompt);
   const fullCommand = `cd ${shellEscape(sourcePackPath)} && ${agentCommand}`;
   const remoteCommand = encodeForRemoteShell(fullCommand);

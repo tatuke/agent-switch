@@ -282,3 +282,75 @@ Use capability signatures for matching — not tool names. Follow progressive in
 Preserve all concrete configuration (URLs, endpoints, file paths, credential references) — these are often platform-independent. Adapt only the tool invocation mechanics.
 
 **Translation, not replacement. Self-mapping, not name-matching. Progressive injection, not wholesale copy.**
+
+## Project Context Import
+
+If the bundle contains `projects-manifest.yaml` and `project-context/`, you must also import the **project-level context** from the source agent's workspaces.
+
+### Step PI1: Read the Projects Manifest
+
+Read `projects-manifest.yaml`. It contains:
+- `workspace_root` — where projects lived on the source machine
+- `projects[]` — list of projects with metadata and transfer method
+
+### Step PI2: Obtain Project Code
+
+For each project in the manifest, follow the transfer method:
+
+| Transfer Method | Action |
+|---|---|
+| `git_link` | Execute `git clone <git_remote>` into an appropriate local directory. If authentication is needed, ask the user. |
+| `zip` | Locate the zip file at `zip_path`. If present, unzip to an appropriate local directory. If missing, note as `missing_zip` and ask the user. |
+| `github` | The project was pushed to GitHub. Ask the user for the GitHub URL, then clone it. |
+
+**Choosing the target directory**:
+- Ask the user where each project should live on the target machine
+- Suggest a reasonable default based on the source `workspace_root` structure
+- Never overwrite an existing directory without explicit user confirmation
+
+### Step PI3: Import Project Context Files
+
+For each project with `has_context_files: true`, read `project-context/<project-name>/` and import context files:
+
+| Source File Pattern | Target Location | Merge Strategy |
+|---|---|---|
+| `AGENTS.md` / `CLAUDE.md` / `GEMINI.md` | Your platform's agent instruction file | **Merge** — add as a new project section |
+| `.cursor/rules/` / `.kiro/steering/` | Your platform's rules directory | **Copy then self-map** — translate platform references |
+| `SECURITY.md` | Your platform's security config | **Evaluate then merge** — only adopt stronger rules |
+| `CONVENTIONS.md` | Your platform's conventions | **Direct merge** — append to project conventions |
+| `.env.example` | Your platform's env reference | **Copy as reference** — ask user for actual values |
+| `Makefile` / `Taskfile` | Project root | **Copy as-is** — may need path adjustments |
+| `specs/` / `docs/` | Project docs area | **Copy as-is** |
+| `memory/` / `rules/` | Your platform's memory storage | **Merge** — tag with source project name |
+
+### Step PI4: Conflict Resolution for Projects
+
+1. **Project already exists** — Offer: Skip / Merge context / Clone as `<name>-imported`
+2. **Git remote differs** — Offer: Use existing / Add as `astp-source` / Replace
+3. **Context file already exists** — Offer: Keep existing / Overwrite / Merge / Save as `.astp-imported`
+
+### Step PI5: Output Project Import Summary
+
+```markdown
+## Project Import Summary
+
+| Project | Transfer Method | Status | Context Files | Conflicts |
+|---|---|---|---|---|
+| my-web-app | git_link | cloned | 3 (AGENTS.md, .cursor/rules/, .env.example) | 0 |
+| my-api | zip | unzipped | 3 (CLAUDE.md, SECURITY.md, specs/) | 1 (#P1) |
+| legacy-script | zip | missing_zip | 0 | 0 |
+
+### Project Conflicts
+
+#### #P1: my-api — SECURITY.md conflict
+- **Source:** "Never use non-ASCII characters in table names"
+- **Current:** No such restriction
+- **Recommendation:** Adopt (stricter rule)
+```
+
+**Requirements**:
+- Never discard project context files silently — always present options
+- Do NOT auto-execute `git clone` or unzip without checking for directory conflicts
+- Do NOT import `.env` files (only `.env.example`) — secrets must be configured fresh
+- Tag all imported project memories with the source project name
+- If `projects-manifest.yaml` is absent, skip this section entirely

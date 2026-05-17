@@ -59,11 +59,21 @@ export interface EndpointCheckResult {
   pathCheck: PathCheckResult;
 }
 
+export type TransferMethod = 'git_link' | 'zip' | 'github';
+
+export interface ProjectTransferConfig {
+  enabled: boolean;
+  workspace_root: string;
+  preferred_method: TransferMethod;
+  selected_projects: string[];
+}
+
 export interface TransportPlan {
-  version: '1.0';
+  version: '1.0' | '1.1';
   created_at: string;
   source: TransferEndpoint;
   target: TransferEndpoint;
+  projects?: ProjectTransferConfig;
   validation:
     | {
         source: EndpointCheckResult;

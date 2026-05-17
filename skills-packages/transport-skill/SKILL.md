@@ -95,12 +95,41 @@ Ask: "Confirm? / Edit a field? / Cancel?"
 If edit → loop back to the relevant step.
 If cancel → exit.
 
+### Step 8.5: Project Workspace Migration
+
+Ask the user if they also want to migrate project-level context from the source workspace:
+
+> "Do you also want to migrate project workspace context (AGENTS.md, .cursor/rules/, specs/, etc.) alongside the agent soul?"
+> Options: Yes / No
+
+If **No**, skip to Step 9.
+
+If **Yes**, ask:
+> "Enter the workspace root path on the source machine (e.g., /home/user/projects):"
+
+Then ask:
+> "Preferred code transfer method for projects?"
+> Options:
+> - Git link only — target clones from git remote (lightweight)
+> - Zip transfer — compress and SCP project code
+> - GitHub — push to GitHub, target clones from there
+
+Record as `projectConfig`:
+```yaml
+enabled: true
+workspace_root: "<path>"
+preferred_method: "<git_link|zip|github>"
+selected_projects: []
+```
+
+Note: The source agent will scan for projects at packing time and prompt for per-project transfer decisions. The `selected_projects` array being empty means "scan all".
+
 ### Step 9: Save Plan
 
-Generate a transport plan YAML:
+Generate a transport plan YAML (version `"1.1"` if project migration is enabled, otherwise `"1.0"`):
 
 ```yaml
-version: "1.0"
+version: "1.1"
 created_at: "<ISO timestamp>"
 source:
   agent: "<sourceAgent>"
@@ -112,6 +141,11 @@ target:
   userAtHost: "<targetUserAtHost>"
   packPath: "<targetPackPath>"
   port: <targetPort>
+projects:
+  enabled: true
+  workspace_root: "<workspaceRoot>"
+  preferred_method: "<git_link|zip|github>"
+  selected_projects: []
 validation:
   source: <check results or skipped: true>
   target: <check results or skipped: true>
@@ -142,3 +176,5 @@ Report transfer result to the user.
 - The `--save-only` flag saves the plan without executing transfer
 - Use your own tools for validation (shell execution for SSH, file tools for path checks)
 - When in doubt about connectivity, ask the user — don't guess
+- Project workspace migration (Step 8.5) produces `projects-manifest.yaml` and `project-context/` in the bundle
+- The target agent should follow `adaptys_en.md` "Project Context Import" section to restore project context
