@@ -37,6 +37,7 @@
     "packys_en.md",
     "adaptys_en.md",
     "README.md",
+    "README.zh.md",
     "LICENSE.md"
   ],
   "dependencies": {

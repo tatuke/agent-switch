@@ -6,7 +6,7 @@ dist
 .env.local
 PLAN.md
 docs
-README.zh.md
 .codegraph/
+
 AGENTS.md
 .codegraph

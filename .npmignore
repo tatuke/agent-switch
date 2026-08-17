@@ -17,5 +17,4 @@ coverage/
 .vscode/
 .idea/
 .DS_Store
-README.zh.md
 vitest.config.ts
