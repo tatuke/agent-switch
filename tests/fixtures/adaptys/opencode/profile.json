@@ -1,0 +1,72 @@
+{
+  "agent": "opencode",
+  "version_range": "1.x",
+  "capability_signatures": {
+    "search": {
+      "input": "query_string",
+      "output": "[file_path + line_number]",
+      "constraints": ["regex", "include_filter", "path_filter"],
+      "match_note": "Grep tool, full regex support"
+    },
+    "read": {
+      "input": "file_path | url",
+      "output": "content",
+      "constraints": ["offset", "limit", "image_pdf_support"],
+      "match_note": "Read tool, supports offset/limit and binary files"
+    },
+    "edit": {
+      "input": "file_path + old_string + new_string",
+      "output": "modified_file",
+      "constraints": ["exact_match", "replaceAll"],
+      "match_note": "Edit tool, exact string replace with replaceAll option"
+    },
+    "execute": {
+      "input": "command_string",
+      "output": "stdout + stderr + exit_code",
+      "constraints": ["timeout", "workdir"],
+      "match_note": "Bash tool, configurable timeout and workdir"
+    },
+    "fetch": {
+      "input": "url",
+      "output": "markdown | html | text",
+      "constraints": ["format_selection", "timeout"],
+      "match_note": "webFetch tool, format selectable"
+    },
+    "diagnostics": null,
+    "preview": null
+  },
+  "native_tools": ["Grep", "Read", "Edit", "Write", "Bash", "webFetch", "Glob", "Task", "Question", "Skill", "TodoWrite"],
+  "rule_system": {
+    "type": "single_file",
+    "format": "markdown",
+    "global_file": "~/.opencode/AGENTS.md",
+    "project_file": "./AGENTS.md",
+    "injection": "append_to_system_prompt"
+  },
+  "tool_permissions": {
+    "type": "json_config",
+    "location": "~/.opencode/config.json",
+    "format": "boolean_map_per_tool"
+  },
+  "hook_system": {
+    "type": "skill_based",
+    "entry": "Skill tool invocation"
+  },
+  "security_boundaries": {
+    "never_expose_secrets": true,
+    "never_auto_commit": true,
+    "never_force_push": true,
+    "destructive_requires_confirmation": true
+  },
+  "session_launch": {
+    "command": "opencode",
+    "pipe_mode": "-p",
+    "working_directory": "project_root",
+    "timeout_seconds": 600,
+    "output_detection": {
+      "method": "file_watch",
+      "path": ".astp-bundle/manifest.yaml",
+      "poll_interval_ms": 5000
+    }
+  }
+}

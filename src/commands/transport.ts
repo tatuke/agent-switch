@@ -213,7 +213,7 @@ async function step3_enterSourceEndpoint(state: TransportWizardState): Promise<v
       validate: (v: string) => {
         const parts = v.trim().split('@');
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
-          return 'Must use format user@host (e.g., alice@10.0.0.5).';
+          return 'Must use format user@host (e.g., alice@203.0.113.5).';
         }
         return true;
       },
@@ -263,7 +263,7 @@ async function step5_enterTargetEndpoint(state: TransportWizardState): Promise<v
       validate: (v: string) => {
         const parts = v.trim().split('@');
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
-          return 'Must use format user@host (e.g., bob@192.168.1.10).';
+          return 'Must use format user@host (e.g., bob@198.51.100.10).';
         }
         return true;
       },

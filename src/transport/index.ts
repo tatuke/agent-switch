@@ -117,7 +117,7 @@ export function classifySshError(message: string): IssueType {
 export function getSuggestionForIssue(type: IssueType): string {
   switch (type) {
     case 'invalid_target':
-      return 'Use `user@host` format, e.g. `alice@10.0.0.8`.';
+      return 'Use `user@host` format, e.g. `alice@203.0.113.8`.';
     case 'dns_not_found':
       return 'Check hostname, DNS, `/etc/hosts` or VPN network.';
     case 'timeout':

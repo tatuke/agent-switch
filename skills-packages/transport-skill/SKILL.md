@@ -33,7 +33,7 @@ Validate: source ≠ target (warn if same, ask user to confirm).
 ### Step 3: Source Endpoint
 
 Ask the user:
-> "Enter the source endpoint in user@host format (e.g., alice@10.0.0.5):"
+> "Enter the source endpoint in user@host format (e.g., alice@203.0.113.5):"
 
 Validate: must contain exactly one `@` separating user and host.
 

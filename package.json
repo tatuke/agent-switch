@@ -13,9 +13,22 @@
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["ai", "agent", "persona", "transfer", "cli"],
+  "keywords": [
+    "ai",
+    "agent",
+    "persona",
+    "transfer",
+    "cli"
+  ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tatuke/agent-switch.git"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "commander": "^12.0.0",
     "cosmiconfig": "^9.0.0",

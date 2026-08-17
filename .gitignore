@@ -4,8 +4,9 @@ dist
 .DS_Store
 .env
 .env.local
-tests
 PLAN.md
 docs
 README.zh.md
+.codegraph/
 AGENTS.md
+.codegraph

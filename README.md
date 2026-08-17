@@ -188,12 +188,6 @@ npm run typecheck  # Type check
 npm run lint       # Lint
 ```
 
-## Technical Notes and Future Plans
-
-1. Memory and skills summarization and transfer is a complex and resource-intensive task. I personally prefer using internal skill networks and external memory components (knowledge bases, memory libraries).
-2. The project has only been verified among three agent tools; not tested on more or newer agent components.
-3. When an agent tool updates (repository source), how to adapt and flexibly schedule.
-
 ## License
 
 MIT
