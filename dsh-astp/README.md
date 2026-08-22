@@ -4,7 +4,7 @@ DeepSeek Harness plugin for Agent Soul Transfer Protocol (ASTP).
 
 ## Overview
 
-This plugin integrates ASTP functionality into DeepSeek Harness, allowing you to transfer AI agent souls between different platforms through natural language commands.
+DeepSeek Harness is a coding agent built on the `pi-agent` framework, in the same general category as `claude-code`, `codex`, and `openclaw`. This plugin branch integrates ASTP functionality into DeepSeek Harness as an independent plugin, allowing you to transfer AI agent souls between different platforms through natural language commands.
 
 ## Features
 
