@@ -16,15 +16,26 @@ This project currently uses pure MD documents as explanations and specifications
 
 It is necessary to explain and summarize the functions in the project files and the upcoming actions to your users before taking any action. If permission is granted to execute, strictly follow the instructions in the files; if not permitted, do not arbitrarily take any actions to delete your own rule files or work files.
 
-## Install & Build
-
-This project is not yet published as a package. Build and run directly from source.
+## Install
 
 ### Prerequisites
 
 - Node.js >= 20
 - npm or pnpm
 - SSH key-based auth to source/target hosts (for remote sessions)
+
+### Install from npm
+
+```bash
+npm install -g agent-soul-transfer
+astp <command> [options]
+```
+
+Or run it without a global install:
+
+```bash
+npx agent-soul-transfer <command> [options]
+```
 
 ### Build from Source
 
@@ -169,6 +180,35 @@ astp list
 ```
 
 ## Supported Agents
+
+### DeepSeek Harness integration
+
+ASTP also supports DeepSeek Harness through the bundled [`dsh-astp`](./dsh-astp) plugin. This integration exposes ASTP tools inside DeepSeek Harness so you can list supported agents, inspect agent info, run transport flows, validate soul files, and list stored souls from DSH.
+
+Install the plugin from the local folder:
+
+```bash
+dsh plugin --profile <profile-name> add ./dsh-astp
+```
+
+Or install it from npm when using the published plugin package:
+
+```bash
+dsh plugin --profile <profile-name> add dsh-astp-plugin
+```
+
+Then point the plugin to the published ASTP CLI in your `cordis.yml`:
+
+```yaml
+- insert:
+    - id: astp
+      name: dsh-astp-plugin
+      config:
+        astpPath: 'astp'
+        defaultTimeout: 300
+```
+
+The table below lists native agent profiles and their current support status in ASTP.
 
 | Agent | CLI Session | Config Location | Notes |
 |---|---|---|---|
