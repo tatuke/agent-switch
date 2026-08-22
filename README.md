@@ -181,41 +181,13 @@ astp list
 
 ## Supported Agents
 
-### DeepSeek Harness integration
-
-ASTP also supports DeepSeek Harness through the bundled [`dsh-astp`](./dsh-astp) plugin. This integration exposes ASTP tools inside DeepSeek Harness so you can list supported agents, inspect agent info, run transport flows, validate soul files, and list stored souls from DSH.
-
-Install the plugin from the local folder:
-
-```bash
-dsh plugin --profile <profile-name> add ./dsh-astp
-```
-
-Or install it from npm when using the published plugin package:
-
-```bash
-dsh plugin --profile <profile-name> add dsh-astp-plugin
-```
-
-Then point the plugin to the published ASTP CLI in your `cordis.yml`:
-
-```yaml
-- insert:
-    - id: astp
-      name: dsh-astp-plugin
-      config:
-        astpPath: 'astp'
-        defaultTimeout: 300
-```
-
-The table below lists native agent profiles and their current support status in ASTP.
-
 | Agent | CLI Session | Config Location | Notes |
 |---|---|---|---|
 | opencode | `opencode -p` | `~/.config/opencode/AGENTS.md` | Full pipe mode support |
 | claude-code | `claude -p` | `~/.claude/CLAUDE.md` | Full pipe mode support |
 | codex | `codex exec` | `~/.codex/AGENTS.md` | Full pipe mode support |
 | openclaw | `openclaw agent --agent <id> -m --local` | `~/.openclaw/workspace/AGENTS.md` | Full pipe mode support |
+| deepseek-harness | `dsh --profile <profile-name>` | `cordis.yml` | Supported via the [`dsh-astp`](./dsh-astp) plugin |
 | cursor | No CLI | `./.cursor/rules/` | File-copy mode only |
 | gemini-cli | `gemini` (TBD) | `~/.gemini/GEMINI.md` | Pipe mode TBD |
 | kiro | No CLI | `./.kiro/steering/` | File-copy mode only |
