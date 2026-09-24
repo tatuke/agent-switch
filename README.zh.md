@@ -16,40 +16,41 @@
 
 有必要在采取任何动作前，先向你的用户解释、总结项目文件中的功能和接下来的动作。如果得到允许执行，严格按照文件中的说明执行，未得到许可时，不要擅自做出任何删除自身规则文件或者工作文件的动作。
 
-## 安装与构建
+packys 还支持可选的密钥文件收集：明文密钥文件（SSH 密钥、`.env`、证书、token 等）仅在明确提醒并经用户确认后才会打包；密钥存储库（Vaultwarden/Bitwarden、KeePass、`pass`、sqlite 等）提供导出迁移 / 备份数据文件 / 跳过三种选项。详见 [packys_en.md](./packys_en.md) 的 "Secret & Key File Handling" 章节。
 
-本项目尚未发布为 npm 包，直接从源码编译使用。
+## 安装
 
 ### 前置要求
 
 - Node.js >= 20
 - npm 或 pnpm
+- 源/目标主机需 SSH 密钥认证（用于远程 session）
+
+### 从 npm 安装
+
+```bash
+npm install -g agent-soul-transfer
+astp <命令> [选项]
+```
+
+或不全局安装，直接运行：
+
+```bash
+npx agent-soul-transfer <命令> [选项]
+```
 
 ### 从源码构建
 
 ```bash
-# 克隆仓库
 git clone https://github.com/tatuke/agent-switch.git
 cd agent-switch
-
-# 安装依赖
 npm install
-
-# 构建
 npm run build
 ```
 
 构建完成后，CLI 可执行文件位于 `dist/main.js`。
 
-## 使用方式
-
-### 直接运行（构建后）
-
-```bash
-node dist/main.js <命令> [选项]
-```
-
-### 或全局链接（可选）
+### 全局链接（可选）
 
 ```bash
 npm link
@@ -58,53 +59,104 @@ astp <命令> [选项]
 
 ### 命令
 
-#### `astp transport` — 交互式传输向导
+#### `astp transport` — 端到端传输向导
 
-完整的 3 步交互式流程：配置源/目标 → SSH session → 传输决策。
+核心命令。引导配置源端和目标端，然后自动：
+
+1. SSH 连接源端主机
+2. 以管道模式启动源端 agent 执行 packys 打包
+3. 将 bundle 收集为 zip
+4. 传输到目标端主机（或保存到本地）
 
 ```bash
-node dist/main.js transport
+astp transport
 ```
 
-逐步向导：
-1. **步骤 0-8**：配置源端 agent、目标端 agent、SSH 端点、连接测试
-2. **步骤 9**：预览 adaptys 兼容矩阵（从 adapter profiles 预计算）
-3. **步骤 10**：SSH 到源端主机，启动 agent CLI session，执行 packys 打包
-4. **步骤 11**：收集 bundle，询问用户是否立即传输
+启动时选择模式：
 
-#### `astp transport` — 使用 flag（跳过向导步骤）
+| 模式 | 说明 |
+|---|---|
+| **保存到本地** | 打包 → zip → 保存到本机。无需配置目标端。 |
+| **传输到其他机器** | 打包 → zip → 通过 SCP 传输到目标端主机。 |
+
+向导步骤：
+- **步骤 0**：选择模式（保存到本地 / 传输）
+- **步骤 1-4**：配置源端 agent、SSH 端点、打包路径
+- **步骤 5-6**：配置目标端（保存到本地模式下跳过）
+- **步骤 7**：连接测试
+- **步骤 8**：预览并确认
+- **步骤 10-12**：执行：SSH session → 打包 → zip → 收集 → 传输
+
+#### `astp transport --save-locally` — 备份模式
+
+跳过所有目标端配置。从源端打包并将 zip 保存到本地。
 
 ```bash
-node dist/main.js transport \
+astp transport --save-locally \
+  --source-agent openclaw \
+  --source-host user@source-host \
+  --source-path /path/to/.astp-bundle
+```
+
+#### `astp transport` — 使用 flag 完整传输
+
+直接提供 flag，跳过向导步骤：
+
+```bash
+astp transport \
   --source-agent opencode \
-  --source-host user@203.0.113.100 \
-  --source-path /home/user/project \
+  --source-host user@source-host \
+  --source-path /path/to/.astp-bundle \
   --source-port 22 \
   --target-agent claude-code \
-  --target-host user@198.51.100.101 \
-  --target-path /home/user/project \
+  --target-host user@target-host \
+  --target-path /path/to/target-bundle \
   --target-port 22 \
-  --skip-check \
-  --save-only
+  --skip-check
+```
+
+#### `astp transport --plan` — 从已保存的 plan 恢复
+
+重新执行之前保存的传输 plan：
+
+```bash
+astp transport --plan ~/.astp/transfers/openclaw-to-claude-code-2026-04-27.yaml
+```
+
+#### 全部 transport flag
+
+```
+--source-agent <name>      源端 agent 名称（跳过步骤 1）
+--source-host <user@host>  源端 SSH 目标（跳过步骤 3）
+--source-path <path>       源端 bundle 路径（跳过步骤 4）
+--source-port <port>       源端 SSH 端口（默认 22）
+--target-agent <name>      目标端 agent 名称（跳过步骤 2）
+--target-host <user@host>  目标端 SSH 目标（跳过步骤 5）
+--target-path <path>       目标端 bundle 路径（跳过步骤 6）
+--target-port <port>       目标端 SSH 端口（默认 22）
+-o, --output <path>        保存传输 plan 的输出路径
+--skip-check               跳过连接与路径校验
+--plan <path>              从已保存的 plan 文件执行（跳过向导）
+--save-locally             备份模式：打包并保存到本地，无需目标端
 ```
 
 #### `astp bundle` — 验证 bundle 目录
 
 ```bash
-node dist/main.js bundle --input .astp-bundle
-node dist/main.js bundle --input .astp-bundle --inject claude-code
+astp bundle --input .astp-bundle
+astp bundle --input .astp-bundle --inject claude-code
 ```
 
 #### `astp validate` — 验证 soul YAML 文件
 
 ```bash
-node dist/main.js validate ./soul.yaml
+astp validate ./soul.yaml
 ```
 
 #### `astp list` — 列出可用的 souls
 
 ```bash
-node dist/main.js list
+astp list
 ```
 
 ## 支持的 Agent
@@ -115,6 +167,7 @@ node dist/main.js list
 | claude-code | `claude -p` | `~/.claude/CLAUDE.md` | 完整管道模式支持 |
 | codex | `codex exec` | `~/.codex/AGENTS.md` | 完整管道模式支持 |
 | openclaw | `openclaw agent -m --local` | `~/.openclaw/workspace/AGENTS.md` | 完整管道模式支持 |
+| deepseek-harness | `dsh --profile <profile-name>` | `cordis.yml` | 通过 [`dsh-astp`](./dsh-astp) 插件支持 |
 | cursor | 无 CLI | `./.cursor/rules/` | 仅文件复制模式 |
 | gemini-cli | `gemini`（待确认） | `~/.gemini/GEMINI.md` | 管道模式待确认 |
 | kiro | 无 CLI | `./.kiro/steering/` | 仅文件复制模式 |

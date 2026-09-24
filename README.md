@@ -16,6 +16,8 @@ This project currently uses pure MD documents as explanations and specifications
 
 It is necessary to explain and summarize the functions in the project files and the upcoming actions to your users before taking any action. If permission is granted to execute, strictly follow the instructions in the files; if not permitted, do not arbitrarily take any actions to delete your own rule files or work files.
 
+packys also supports optional secret & key file collection: plaintext key files (SSH keys, `.env`, certs, tokens, ...) are packed only after an explicit reminder and user confirmation, and secret stores (Vaultwarden/Bitwarden, KeePass, `pass`, sqlite-backed stores, ...) get export / backup / skip options. See the "Secret & Key File Handling" section in [packys_en.md](./packys_en.md).
+
 ## Install
 
 ### Prerequisites
