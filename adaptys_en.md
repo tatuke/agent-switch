@@ -17,8 +17,10 @@ You will read the following files:
 - `security-patterns.md` — operational security patterns (Layer 3)
 - `resources.md`
 - `manifest.yaml`
+- `secrets-manifest.yaml` — optional; present only when the bundle is secret-bearing (see [Secret Restoration](#secret-restoration))
+- `secrets/` — optional; present only when the bundle is secret-bearing (see [Secret Restoration](#secret-restoration))
 
-Do not read memory. Do not process skills.
+Do not read memory. Do not process skills. Do NOT read or print the content of files under `secrets/` — treat them as opaque binaries.
 
 ## Step 0: Compatibility Self-Assessment
 
@@ -354,3 +356,20 @@ For each project with `has_context_files: true`, read `project-context/<project-
 - Do NOT import `.env` files (only `.env.example`) — secrets must be configured fresh
 - Tag all imported project memories with the source project name
 - If `projects-manifest.yaml` is absent, skip this section entirely
+
+## Secret Restoration
+
+If `manifest.yaml` has `metadata.contains_secrets: true`, the bundle carries secret material under `secrets/` (packed on the source side via packys "Secret & Key File Handling"). Restoration is strictly user-driven:
+
+1. **Read `secrets-manifest.yaml`** (not the secret files). Present the user with the entry table: `original_path`, `referenced_by`, `purpose`, `action`.
+2. **Ask for explicit confirmation** for each entry before restoring anything:
+   > "Restore `<original_path>` (referenced by `<referenced_by>`)? [1] Yes  [2] No — I will set it up manually  [3] Restore to a different path"
+3. **Restore as an opaque binary copy** — never read, print, or transform file content. Restore original file permissions (private keys `0600`). Never overwrite an existing file without confirmation.
+4. For `exported` / `backed_up` secret stores (under `secrets/store-backup/`): do not import them yourself. Locate the file and instruct the user how to re-import it into their store (e.g., Bitwarden / Vaultwarden encrypted JSON import, KeePass open `.kdbx`). The user handles all authentication.
+5. For `declined` / `skipped` entries: use the reference paths recorded in `security-patterns.md` to help the user set up credentials manually.
+6. After restoration, recommend that the user delete the secret-bearing bundle zip and the temporary `secrets/` copy.
+
+Requirements:
+- NEVER upload, commit, or forward a secret-bearing bundle or any restored secret file.
+- If the bundle zip was encrypted, keep the decrypted copy only for the duration of the restore.
+- If `secrets-manifest.yaml` is absent, skip this section entirely.
