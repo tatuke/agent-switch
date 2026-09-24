@@ -15,7 +15,7 @@ Please collect and organize the following content currently accessible to you:
 7. **Concrete tool-to-endpoint mappings** (currently running tools, their configs, auth references)
 8. **Operational security patterns** (how secrets are handled, what requires approval, etc.)
 
-Do not export memory. Do not export skills. **NEVER export actual secret values, passwords, or API keys — only references to their storage location.**
+Do not export memory. Do not export skills. **NEVER write actual secret values, passwords, or API keys into any bundle markdown output — only references to their storage location.** Actual key FILES may be packed ONLY through the [Secret & Key File Handling](#secret--key-file-handling) section, which requires an explicit user reminder and confirmation.
 
 ## Mandatory Workspace Scan
 
@@ -25,7 +25,7 @@ Before exporting, scan your workspace for these files and extract their content 
 |---|---|---|
 | `TOOLS.md` (or equivalent) | `tool-map.md` + `security-patterns.md` | Extract concrete tool configs, endpoints, auth references |
 | `.env.example` or `.env` | `resources.md` + `tool-map.md` | Reference env var names only, redact actual values |
-| `credentials/` directory | `security-patterns.md` | Reference structure and usage pattern only, **NEVER copy actual credentials** |
+| `credentials/` directory | `security-patterns.md` | Reference structure and usage pattern only. Actual files may be packed ONLY via [Secret & Key File Handling](#secret--key-file-handling) with user confirmation |
 | `SECURITY.md` or security sections | `principles.md` + `security-patterns.md` | Extract rules and operational patterns |
 | Project config files (`.gitconfig`, `pyproject.toml`, etc.) | `rules-project.md` | Extract project conventions |
 
@@ -41,6 +41,8 @@ Please output to the `.astp-bundle/` directory, containing at least the followin
 - `tool-map.md` — **concrete tool-to-endpoint mappings with open platform hints**
 - `security-patterns.md` — **operational security patterns**
 - `resources.md`
+- `secrets/` — **optional; only created via [Secret & Key File Handling](#secret--key-file-handling) with user confirmation**
+- `secrets-manifest.yaml` — **index of collected secret material; required if `secrets/` exists**
 - `manifest.yaml` — **with extended metadata fields**
 
 If an item does not exist, still output an empty file and state `not found` at the beginning of the file.
@@ -370,9 +372,10 @@ For each project, scan for these files and directories that contain **developmen
 
 **Important**:
 - Only collect files that exist — do NOT fabricate or guess content
-- **NEVER include files containing actual secrets, passwords, API keys, or credentials**
+- **NEVER include files containing actual secrets, passwords, API keys, or credentials** — key files follow the [Secret & Key File Handling](#secret--key-file-handling) flow instead
 - If a file contains mixed content (some safe, some sensitive), extract only the non-sensitive portions
 - Mark files that were found but not included due to sensitivity as `redacted` in the manifest
+- **AGENTS.md vs CLAUDE.md**: Claude Code reads `AGENTS.md` natively. Treat `AGENTS.md` as the canonical cross-agent rules file. If `CLAUDE.md` only duplicates `AGENTS.md`, record it in `projects-manifest.yaml` as a duplicate (e.g., `context_files_duplicates: ["CLAUDE.md -> AGENTS.md"]`) and collect `AGENTS.md` once. Only collect `CLAUDE.md` separately when it contains Claude-specific content that `AGENTS.md` lacks. Apply the same dedup logic to other platform variants (e.g., `GEMINI.md`) when they mirror `AGENTS.md`.
 
 ### Step PW3: Code Transfer Method Selection
 
@@ -467,6 +470,68 @@ For each project that has context files, create a subdirectory under `project-co
 - **NEVER copy actual `.env` files or files containing real credentials** — use `.env.example` only
 - If uncertain about a file's sensitivity, exclude it and note in `projects-manifest.yaml` as `redacted`
 
+## Secret & Key File Handling
+
+A transferred agent usually needs the same key material (SSH keys, API keys, tokens) on the target machine to keep working. This section defines how key material is collected into the bundle — always under explicit user control.
+
+**Hard boundary**: this section governs key FILES and secret-store DATA only. Secret VALUES must never be written into any bundle markdown output — `tool-map.md`, `security-patterns.md`, etc. keep using references.
+
+### Step SF1: Detect Storage Mode
+
+Scan the workspace and home directory for key material and classify it:
+
+| Mode | Meaning | Typical Locations / Patterns |
+|---|---|---|
+| `plaintext_file` | Secrets stored as plaintext files | `~/.ssh/id_*` (private keys), `~/.ssh/config`, `.env` with real values, `*.pem` / `*.key` / `*.p12`, service-account JSON, `~/.npmrc` (`_authToken`), `~/.git-credentials`, `~/.netrc`, `~/.aws/credentials`, `~/.config/gcloud/*credentials*.json`, GPG private key files |
+| `secret_store` | Secrets stored in a vault / database | Vaultwarden / Bitwarden (server vault, CLI data dir, `db.sqlite3`), KeePass (`.kdbx`), `pass` (`~/.password-store/`), 1Password, sqlite-backed credential stores, browser profile stores |
+
+Detection rules:
+- Only report files and stores that exist. Do not guess paths.
+- For each candidate, determine **where it is referenced from** (the reference path): `~/.ssh/config` Host entries, `.env` variables pointing to key files, config fields, tool settings. A key file with no discoverable reference is listed as `unreferenced`.
+
+### Step SF2: Plaintext Key Files — Remind, Confirm, Pack
+
+For every plaintext key file found:
+
+1. **Verify the reference**: confirm which project, tool, or config actually uses this file (e.g., `~/.ssh/config` entry `Host source-host → IdentityFile ~/.ssh/id_ed25519`, or an `.env` variable pointing to a cert path).
+2. **Remind the user explicitly** before packing. Present a table:
+
+   | File | Referenced by | Grants access to |
+   |---|---|---|
+   | `~/.ssh/id_ed25519` | `~/.ssh/config` Host `source-host` | SSH login to source-host |
+   | `~/.npmrc` | npm publish config | npm registry account |
+
+   And state clearly:
+   > "These files contain secret key material. If you confirm, they will be packed into `secrets/` inside the bundle. The bundle must then be encrypted before transfer. Continue?"
+
+3. **Only after explicit user confirmation**, copy each confirmed file into `.astp-bundle/secrets/<category>/<filename>`. Categories: `ssh/`, `env/`, `certs/`, `tokens/`, `gpg/`, `unreferenced/`.
+   - Preserve original file permissions (private keys must be `0600`).
+   - NEVER read, print, or transform the file content. Copy it as an opaque binary.
+4. If the user declines a file, do NOT copy it. Record the file in `secrets-manifest.yaml` as `declined`, and write the reference path (not the value) into `security-patterns.md` so the target agent knows what must be set up manually.
+
+### Step SF3: Secret Stores — Migration or Backup Options
+
+When key material lives in a secret store (Vaultwarden, KeePass, `pass`, 1Password, sqlite-backed stores, ...), packing individual secret values is forbidden. Offer the user three options:
+
+| Option | Value | What happens |
+|---|---|---|
+| **Migrate (export)** | `export` | Export the store to a portable encrypted format the target can re-import. Examples: Vaultwarden / Bitwarden → encrypted JSON export (web vault or `bw export`); KeePass → `.kdbx` is already portable; `pass` → tar of `~/.password-store/`. The user performs all authentication steps — master passwords are NEVER handled by the agent. |
+| **Backup data files** | `backup` | Copy the store's local data files into `secrets/store-backup/`: e.g., Vaultwarden `db.sqlite3` + attachments directory, bitwarden-cli data directory, the sqlite database file of sqlite-backed stores. Server-hosted vaults (e.g., bitwarden.com) only expose a local client cache — recommend `export` instead. |
+| **Skip** | `skip` | Record the store name and reference only; the target agent re-links to an existing or newly set-up store. |
+
+Rules:
+- Default to `skip` when the user gives no preference. Never choose `export` or `backup` silently.
+- Store backups and exports are copied as opaque files — never inspect, print, or transform their content.
+
+### Step SF4: Protection Requirements
+
+- If `secrets/` exists, the bundle is **secret-bearing**:
+  - `manifest.yaml` MUST set `metadata.contains_secrets: true`, and every entry MUST be listed in `secrets-manifest.yaml`.
+  - Before any transfer, the bundle zip MUST be encrypted (`zip -e`, `gpg -c`, or equivalent) unless the user explicitly opts out.
+  - NEVER upload a secret-bearing bundle to public or untrusted storage. NEVER commit it to git.
+- `secrets-manifest.yaml` records, for every entry: `original_path`, `referenced_by`, `purpose`, `action` (`packed` / `declined` / `exported` / `backed_up` / `skipped`), and `store` (for secret stores). It must NOT contain secret values.
+- On the receiving side, restoring any `secrets/` entry requires explicit user confirmation and must restore original file permissions (see `adaptys_en.md`).
+
 ## Skills Package Dependency Declarations
 
 When outputting skills package content, each package may declare dependencies on other packages:
@@ -505,6 +570,7 @@ includes:
   tool_map: true
   security_patterns: true
   resources: true
+  secrets: false
 excludes:
   memory: true
   skills: true
@@ -513,11 +579,13 @@ metadata:
   cost_class: "<light|medium|heavy>"
   origin: "<ECC|community|custom>"
   dependencies: []
+  contains_secrets: false
 notes:
   - "project rules may be incomplete if project context is limited"
   - "tool-map references credential storage by name only; no actual secrets included"
   - "capability signatures are platform-agnostic; receiving agents should self-map"
   - "platform mapping hints are generic descriptions, not specific platform tool names"
+  - "secrets: true / contains_secrets: true only when secrets/ was packed via Secret & Key File Handling with explicit user confirmation"
 ```
 
 ## Content Organization Principles
