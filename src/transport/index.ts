@@ -5,10 +5,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import * as fs from 'fs-extra';
+import { isTailcatInstalled, isValidTailcatAddress, tailcatExecCommand, tailcatPingUntilDirect } from '../session/tailcat-exec.js';
 
 const execFileAsync = promisify(execFile);
 
 export const DEFAULT_SSH_PORT = 22;
+
+export type TransferChannel = 'ssh' | 'tailcat';
 
 export type CheckSeverity = 'ok' | 'warning' | 'error';
 
@@ -22,6 +25,9 @@ export type IssueType =
   | 'remote_path_missing'
   | 'local_path_missing'
   | 'parent_path_missing'
+  | 'tailcat_invalid_addr'
+  | 'tailcat_unavailable'
+  | 'tailcat_connect_failed'
   | 'unknown';
 
 export interface TransferEndpoint {
@@ -29,6 +35,9 @@ export interface TransferEndpoint {
   userAtHost: string;
   packPath: string;
   port: number;
+  channel?: TransferChannel;
+  /** tailcat address (tcXXX...) — required when channel is 'tailcat' */
+  tailcatAddr?: string;
 }
 
 export interface ParsedUserHost {
@@ -69,7 +78,7 @@ export interface ProjectTransferConfig {
 }
 
 export interface TransportPlan {
-  version: '1.0' | '1.1';
+  version: '1.0' | '1.1' | '1.2';
   created_at: string;
   source: TransferEndpoint;
   target: TransferEndpoint;
@@ -114,6 +123,18 @@ export function classifySshError(message: string): IssueType {
   return 'unknown';
 }
 
+export function classifyTailcatError(message: string): IssueType {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('command not found') || normalized.includes('enoent')) return 'tailcat_unavailable';
+  if (normalized.includes('timed out') || normalized.includes('timeout')) return 'timeout';
+  if (normalized.includes('connection refused') || normalized.includes('refused')) return 'connection_refused';
+  if (normalized.includes('invalid') || normalized.includes('malformed') || normalized.includes('bad address')) return 'tailcat_invalid_addr';
+  if (normalized.includes('permission') || normalized.includes('not authorized') || normalized.includes('unauthorized')) return 'auth_failed';
+
+  return 'tailcat_connect_failed';
+}
+
 export function getSuggestionForIssue(type: IssueType): string {
   switch (type) {
     case 'invalid_target':
@@ -134,6 +155,12 @@ export function getSuggestionForIssue(type: IssueType): string {
       return 'Check local `packpath` is correct, create or fix path if needed.';
     case 'parent_path_missing':
       return 'Check parent directory of target exists and write location is correct.';
+    case 'tailcat_invalid_addr':
+      return 'Paste the full tailcat address (starts with `tc`, case-sensitive) printed by `tailcat serve` on the remote host. DNS names published via TXT records are also accepted.';
+    case 'tailcat_unavailable':
+      return 'Install tailcat from github.com/tailscale/tailcat (see INSTALL.md), or switch back to the ssh channel.';
+    case 'tailcat_connect_failed':
+      return 'Confirm `tailcat serve` is still running on the remote host — ephemeral addresses expire when the serve process exits. Retry or request a fresh address.';
     default:
       return 'Check error details and handle manually, or verify with `ssh` separately.';
   }
@@ -152,6 +179,10 @@ export function isLocalHost(host: string): boolean {
 }
 
 export async function checkEndpoint(endpoint: TransferEndpoint, role: 'source' | 'target', auth?: SshAuthConfig): Promise<EndpointCheckResult> {
+  if (endpoint.channel === 'tailcat') {
+    return checkTailcatEndpoint(endpoint, role);
+  }
+
   const issues: CheckIssue[] = [];
 
   let parsedTarget: ParsedUserHost;
@@ -352,6 +383,121 @@ async function checkRemotePackPath(
 
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+async function checkTailcatEndpoint(endpoint: TransferEndpoint, role: 'source' | 'target'): Promise<EndpointCheckResult> {
+  const issues: CheckIssue[] = [];
+  const address = endpoint.tailcatAddr?.trim() ?? '';
+  const displayTarget: ParsedUserHost = { user: 'tailcat', host: address || '(no address)' };
+
+  const failResult = (connectivityMessage: string, issueType: IssueType): EndpointCheckResult => ({
+    endpoint,
+    parsedTarget: displayTarget,
+    connectivity: 'error',
+    pathStatus: 'warning',
+    issues: [...issues, {
+      type: issueType,
+      message: connectivityMessage,
+      suggestion: getSuggestionForIssue(issueType),
+    }],
+    pathCheck: {
+      status: 'warning',
+      message: 'Skipped path validation because connectivity check failed.',
+      checkedPath: endpoint.packPath,
+      exists: null,
+      issueType: null,
+    },
+  });
+
+  if (!address || !isValidTailcatAddress(address)) {
+    return failResult(`Invalid tailcat address: ${address || '(empty)'}`, 'tailcat_invalid_addr');
+  }
+
+  if (!(await isTailcatInstalled())) {
+    return failResult('tailcat binary not found on this machine.', 'tailcat_unavailable');
+  }
+
+  let connectivity: CheckSeverity = 'ok';
+
+  try {
+    await tailcatPingUntilDirect(address);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown tailcat connectivity error';
+    const type = classifyTailcatError(message);
+    issues.push({ type, message, suggestion: getSuggestionForIssue(type) });
+    connectivity = 'error';
+  }
+
+  const pathCheck = connectivity === 'error'
+    ? {
+        status: 'warning' as const,
+        message: 'Skipped path validation because connectivity check failed.',
+        checkedPath: endpoint.packPath,
+        exists: null,
+        issueType: null,
+      }
+    : await checkTailcatPackPath(address, endpoint, role);
+
+  if (pathCheck.status !== 'ok' && pathCheck.issueType) {
+    issues.push({
+      type: pathCheck.issueType,
+      message: pathCheck.message,
+      suggestion: getSuggestionForIssue(pathCheck.issueType),
+    });
+  }
+
+  return {
+    endpoint,
+    parsedTarget: displayTarget,
+    connectivity,
+    pathStatus: pathCheck.status,
+    issues,
+    pathCheck,
+  };
+}
+
+async function checkTailcatPackPath(
+  address: string,
+  endpoint: TransferEndpoint,
+  role: 'source' | 'target',
+): Promise<PathCheckResult> {
+  const pathToCheck = role === 'source' ? endpoint.packPath : path.posix.dirname(endpoint.packPath);
+  const command = `test -e ${shellEscape(pathToCheck)}`;
+
+  try {
+    await tailcatExecCommand(address, command, 15000);
+
+    return {
+      status: 'ok',
+      message: role === 'source' ? 'Remote source packpath exists (via tailcat).' : 'Remote target parent directory exists (via tailcat).',
+      checkedPath: pathToCheck,
+      exists: true,
+      issueType: null,
+    };
+  } catch (error) {
+    const execError = toExecError(error);
+    const issueType = classifyTailcatError(execError.message);
+
+    if (issueType !== 'tailcat_connect_failed' && issueType !== 'unknown') {
+      return {
+        status: 'warning',
+        message: execError.message,
+        checkedPath: pathToCheck,
+        exists: null,
+        issueType,
+      };
+    }
+
+    return {
+      status: 'error',
+      message: role === 'source'
+        ? `Remote source packpath not found: ${pathToCheck}`
+        : `Remote target parent directory not found: ${pathToCheck}`,
+      checkedPath: pathToCheck,
+      exists: false,
+      issueType: role === 'source' ? 'remote_path_missing' : 'parent_path_missing',
+    };
+  }
 }
 
 function toExecError(error: unknown): Error {

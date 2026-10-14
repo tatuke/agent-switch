@@ -2,10 +2,11 @@ import * as fs from 'fs-extra';
 import path from 'path';
 import type { Profile } from '../soul/schema.js';
 import { parseUserAtHost } from '../transport/index.js';
-import type { ProjectTransferConfig } from '../transport/index.js';
+import type { ProjectTransferConfig, TransferChannel } from '../transport/index.js';
 import { logger } from '../utils/logger.js';
 import { buildPackPrompt, buildCliCommand } from './prompt-builder.js';
 import { sshCopyFiles, sshExecCommand, sshCheckCommandExists } from './ssh-exec.js';
+import { tailcatCheckCommandExists, tailcatCopyFile, tailcatExecCommand } from './tailcat-exec.js';
 
 function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -22,6 +23,8 @@ interface SessionLaunchOptions {
   sourceUserAtHost: string;
   sourcePort: number;
   sourcePackPath: string;
+  channel?: TransferChannel;
+  sourceTailcatAddr?: string;
   localPackysPath: string;
   localTargetProfilePath: string;
   localSourceConfigPath: string;
@@ -42,6 +45,8 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
     sourceUserAtHost,
     sourcePort,
     sourcePackPath,
+    channel = 'ssh',
+    sourceTailcatAddr,
     localPackysPath,
     localTargetProfilePath,
     localSourceConfigPath,
@@ -49,9 +54,15 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
     projectConfig,
   } = options;
 
-  const sourceTarget = parseUserAtHost(sourceUserAtHost);
+  const isTailcat = channel === 'tailcat';
 
-  logger.info('=== Step 1: Source Agent Session ===');
+  if (isTailcat && !sourceTailcatAddr) {
+    return { success: false, error: 'tailcat channel selected but no source tailcat address provided.' };
+  }
+
+  const sourceTarget = isTailcat ? undefined : parseUserAtHost(sourceUserAtHost);
+
+  logger.info(`=== Step 1: Source Agent Session (${channel}) ===`);
 
   logger.info('[1.1] Preparing session materials...');
   const filesToCopy: Record<string, string> = {
@@ -61,7 +72,15 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   };
 
   try {
-    await sshCopyFiles(sourceTarget, sourcePort, filesToCopy, remoteSessionDir);
+    if (isTailcat) {
+      const addr = sourceTailcatAddr as string;
+      await tailcatExecCommand(addr, `mkdir -p ${shellEscape(remoteSessionDir)}`);
+      for (const [remoteName, localPath] of Object.entries(filesToCopy)) {
+        await tailcatCopyFile(localPath, addr, path.posix.join(remoteSessionDir, remoteName));
+      }
+    } else {
+      await sshCopyFiles(sourceTarget!, sourcePort, filesToCopy, remoteSessionDir);
+    }
   } catch (e) {
     return { success: false, error: `Failed to copy files: ${e instanceof Error ? e.message : String(e)}` };
   }
@@ -76,7 +95,9 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   }
 
   logger.info('[1.2] Checking CLI availability...');
-  const cliExists = await sshCheckCommandExists(sourceTarget, sourcePort, cliCommand);
+  const cliExists = isTailcat
+    ? await tailcatCheckCommandExists(sourceTailcatAddr as string, cliCommand)
+    : await sshCheckCommandExists(sourceTarget!, sourcePort, cliCommand);
   if (!cliExists) {
     return { success: false, error: `CLI command "${cliCommand}" not found on source host. Is ${sourceProfile.agent} installed?` };
   }
@@ -90,9 +111,15 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   const timeoutMs = sourceProfile.session_launch.timeout_seconds * 1000;
 
   try {
-    const { stdout, stderr } = await sshExecCommand(sourceTarget, sourcePort, remoteCommand, timeoutMs);
-    logger.info(`Agent session stdout: ${stdout.substring(0, 200)}`);
-    if (stderr) logger.warn(`Agent session stderr: ${stderr.substring(0, 200)}`);
+    if (isTailcat) {
+      const { stdout, stderr } = await tailcatExecCommand(sourceTailcatAddr as string, remoteCommand, timeoutMs);
+      logger.info(`Agent session stdout: ${stdout.substring(0, 200)}`);
+      if (stderr) logger.warn(`Agent session stderr: ${stderr.substring(0, 200)}`);
+    } else {
+      const { stdout, stderr } = await sshExecCommand(sourceTarget!, sourcePort, remoteCommand, timeoutMs);
+      logger.info(`Agent session stdout: ${stdout.substring(0, 200)}`);
+      if (stderr) logger.warn(`Agent session stderr: ${stderr.substring(0, 200)}`);
+    }
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);
     logger.error(`Agent session failed: ${errorMsg}`);
@@ -102,7 +129,11 @@ export async function launchSourceSession(options: SessionLaunchOptions): Promis
   logger.info('[1.4] Checking bundle result...');
   const manifestPath = `${sourcePackPath}/manifest.yaml`;
   try {
-    await sshExecCommand(sourceTarget, sourcePort, `test -e ${shellEscape(manifestPath)}`, 10000);
+    if (isTailcat) {
+      await tailcatExecCommand(sourceTailcatAddr as string, `test -e ${shellEscape(manifestPath)}`, 10000);
+    } else {
+      await sshExecCommand(sourceTarget!, sourcePort, `test -e ${shellEscape(manifestPath)}`, 10000);
+    }
   } catch {
     return { success: false, error: 'Bundle manifest not found after session. Packing may have failed.' };
   }

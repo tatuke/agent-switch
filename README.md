@@ -25,6 +25,7 @@ packys also supports optional secret & key file collection: plaintext key files 
 - Node.js >= 20
 - npm or pnpm
 - SSH key-based auth to source/target hosts (for remote sessions)
+- Optional: [tailcat](https://github.com/tailscale/tailcat) — for the `tailcat` transfer channel (no SSH keys, no account, no root; NAT traversal built in)
 
 ### Install from npm
 
@@ -82,6 +83,7 @@ On start, choose a mode:
 Wizard steps:
 
 - **Step 0**: Choose mode (save locally / transfer)
+- **Step 0.5**: Choose transfer channel (SSH / tailcat)
 - **Step 1-4**: Configure source agent, SSH endpoint, pack path
 - **Step 5-6**: Configure target (skipped in save-locally mode)
 - **Step 7**: Connectivity test
@@ -98,6 +100,31 @@ astp transport --save-locally \
   --source-host user@source-host \
   --source-path /path/to/.astp-bundle
 ```
+
+### `astp transport --channel tailcat` — tailcat transfer channel
+
+Use [tailcat](https://github.com/tailscale/tailcat) ("Tailscale without Tailscale") instead of SSH/SCP. No SSH keys, no account, no root — the remote side runs a `tailcat serve` process and you paste its ephemeral address:
+
+```bash
+# On the source host (and on the target host, if transferring):
+tailcat serve ssh --ssh-authorized-keys=~/.ssh/authorized_keys
+# or: tailcat serve no-auth-ssh   # WARNING: the address grants shell access — share privately only
+
+# Then:
+astp transport --channel tailcat \
+  --source-agent openclaw \
+  --source-addr tcXXXXXXXX... \
+  --source-path /path/to/.astp-bundle \
+  --target-agent claude-code \
+  --target-addr tcYYYYYYYY... \
+  --target-path /path/to/target-bundle
+```
+
+Notes:
+
+- tailcat addresses are case-sensitive and expire when the `serve` process exits (ephemeral keys by default)
+- the connectivity check uses `tailcat ping --until-direct` — bundles transfer faster over a direct connection than over rate-limited shared DERP relays
+- secret-bearing bundles must still be encrypted before transfer (see the "Secret & Key File Handling" section in [packys_en.md](./packys_en.md))
 
 ### `astp transport` — Full transfer with flags
 
@@ -131,10 +158,13 @@ astp transport --plan ~/.astp/transfers/openclaw-to-claude-code-2026-04-27.yaml
 --source-host <user@host>  Source SSH target (skips Step 3)
 --source-path <path>       Source bundle path (skips Step 4)
 --source-port <port>        Source SSH port (default: 22)
+--channel <type>            Transfer channel: ssh (default) or tailcat
+--source-addr <address>     Source tailcat address tcXXX... (tailcat channel)
 --target-agent <name>      Target agent name (skips Step 2)
 --target-host <user@host>  Target SSH target (skips Step 5)
 --target-path <path>       Target bundle path (skips Step 6)
 --target-port <port>       Target SSH port (default: 22)
+--target-addr <address>     Target tailcat address tcXXX... (tailcat channel)
 -o, --output <path>        Output path for saved transport plan
 --skip-check               Skip connectivity and path validation
 --plan <path>               Execute from saved plan file (skip wizard)

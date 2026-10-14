@@ -25,6 +25,7 @@ packys 还支持可选的密钥文件收集：明文密钥文件（SSH 密钥、
 - Node.js >= 20
 - npm 或 pnpm
 - 源/目标主机需 SSH 密钥认证（用于远程 session）
+- 可选：[tailcat](https://github.com/tailscale/tailcat)——用于 `tailcat` 传输通道（免 SSH 密钥、免账号、免 root，自带 NAT 穿透）
 
 ### 从 npm 安装
 
@@ -81,6 +82,7 @@ astp transport
 
 向导步骤：
 - **步骤 0**：选择模式（保存到本地 / 传输）
+- **步骤 0.5**：选择传输通道（SSH / tailcat）
 - **步骤 1-4**：配置源端 agent、SSH 端点、打包路径
 - **步骤 5-6**：配置目标端（保存到本地模式下跳过）
 - **步骤 7**：连接测试
@@ -97,6 +99,31 @@ astp transport --save-locally \
   --source-host user@source-host \
   --source-path /path/to/.astp-bundle
 ```
+
+#### `astp transport --channel tailcat` — tailcat 传输通道
+
+用 [tailcat](https://github.com/tailscale/tailcat)（"没有 Tailscale 的 Tailscale"）替代 SSH/SCP。免 SSH 密钥、免账号、免 root——远端跑一个 `tailcat serve` 进程，你粘贴它打印的临时地址即可：
+
+```bash
+# 在源端主机（传输模式下还包括目标端主机）上：
+tailcat serve ssh --ssh-authorized-keys=~/.ssh/authorized_keys
+# 或：tailcat serve no-auth-ssh   # 警告：地址即 shell 权限，只能私密分享
+
+# 然后：
+astp transport --channel tailcat \
+  --source-agent openclaw \
+  --source-addr tcXXXXXXXX... \
+  --source-path /path/to/.astp-bundle \
+  --target-agent claude-code \
+  --target-addr tcYYYYYYYY... \
+  --target-path /path/to/target-bundle
+```
+
+注意：
+
+- tailcat 地址区分大小写，默认为临时密钥，`serve` 进程退出后地址即失效
+- 连接测试用 `tailcat ping --until-direct`——走直连比走限速的共享 DERP 中继更快
+- 含密钥的 bundle 在传输前仍须加密（见 [packys_en.md](./packys_en.md) 的 "Secret & Key File Handling" 章节）
 
 #### `astp transport` — 使用 flag 完整传输
 
@@ -130,10 +157,13 @@ astp transport --plan ~/.astp/transfers/openclaw-to-claude-code-2026-04-27.yaml
 --source-host <user@host>  源端 SSH 目标（跳过步骤 3）
 --source-path <path>       源端 bundle 路径（跳过步骤 4）
 --source-port <port>       源端 SSH 端口（默认 22）
+--channel <type>           传输通道：ssh（默认）或 tailcat
+--source-addr <address>     源端 tailcat 地址 tcXXX...（tailcat 通道）
 --target-agent <name>      目标端 agent 名称（跳过步骤 2）
 --target-host <user@host>  目标端 SSH 目标（跳过步骤 5）
 --target-path <path>       目标端 bundle 路径（跳过步骤 6）
 --target-port <port>       目标端 SSH 端口（默认 22）
+--target-addr <address>     目标端 tailcat 地址 tcXXX...（tailcat 通道）
 -o, --output <path>        保存传输 plan 的输出路径
 --skip-check               跳过连接与路径校验
 --plan <path>              从已保存的 plan 文件执行（跳过向导）

@@ -2,10 +2,12 @@ import { describe, expect, test } from 'vitest';
 import {
   buildDefaultTransportPlanName,
   classifySshError,
+  classifyTailcatError,
   getSuggestionForIssue,
   normalizeAgentName,
   parseUserAtHost,
 } from '../../src/transport/index';
+import { isValidTailcatAddress } from '../../src/session/tailcat-exec';
 
 describe('transport helpers', () => {
   test('parseUserAtHost parses a valid SSH target', () => {
@@ -45,5 +47,51 @@ describe('transport helpers', () => {
 
   test('buildDefaultTransportPlanName uses normalized agent names', () => {
     expect(buildDefaultTransportPlanName('Claude Code', 'OpenCode')).toMatch(/^claude-code-to-opencode-/);
+  });
+});
+
+describe('tailcat helpers', () => {
+  test('isValidTailcatAddress accepts a tc address', () => {
+    expect(isValidTailcatAddress('tcomFwWCCcjS5nKNqAod034nWoJZW0LZqDhhC8U_dKdnDRYQ8uNGFpGQEu')).toBe(true);
+  });
+
+  test('isValidTailcatAddress accepts a DNS name', () => {
+    expect(isValidTailcatAddress('my-server.example.com')).toBe(true);
+  });
+
+  test('isValidTailcatAddress rejects flag-injecting values', () => {
+    expect(isValidTailcatAddress('-o/etc/passwd')).toBe(false);
+  });
+
+  test('isValidTailcatAddress rejects user@host forms', () => {
+    expect(isValidTailcatAddress('alice@10.0.0.8')).toBe(false);
+  });
+
+  test('isValidTailcatAddress rejects empty and whitespace values', () => {
+    expect(isValidTailcatAddress('')).toBe(false);
+    expect(isValidTailcatAddress('tc abc')).toBe(false);
+  });
+
+  test('classifyTailcatError identifies a missing binary', () => {
+    expect(classifyTailcatError('spawn tailcat ENOENT')).toBe('tailcat_unavailable');
+    expect(classifyTailcatError('tailcat: command not found')).toBe('tailcat_unavailable');
+  });
+
+  test('classifyTailcatError identifies timeouts', () => {
+    expect(classifyTailcatError('ping timed out waiting for direct connection')).toBe('timeout');
+  });
+
+  test('classifyTailcatError identifies malformed addresses', () => {
+    expect(classifyTailcatError('invalid tailcat address: bad address')).toBe('tailcat_invalid_addr');
+  });
+
+  test('classifyTailcatError falls back to connect failure', () => {
+    expect(classifyTailcatError('server did not respond')).toBe('tailcat_connect_failed');
+  });
+
+  test('getSuggestionForIssue returns tailcat guidance', () => {
+    expect(getSuggestionForIssue('tailcat_unavailable')).toContain('tailcat');
+    expect(getSuggestionForIssue('tailcat_invalid_addr')).toContain('tc');
+    expect(getSuggestionForIssue('tailcat_connect_failed')).toContain('tailcat serve');
   });
 });

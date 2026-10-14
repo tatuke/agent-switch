@@ -20,23 +20,43 @@ import { loadProfile, hasCliSession } from '../adaptys/index.js';
 import type { Profile } from '../soul/schema.js';
 import { launchSourceSession } from '../session/session-launcher.js';
 import { collectBundleAsZip, transferZipToTarget, promptTransferDecision } from './transfer-bundle.js';
+import { isValidTailcatAddress } from '../session/tailcat-exec.js';
+import type { TransferChannel } from '../transport/index.js';
 
 interface TransportWizardState {
   sourceAgent: string;
   sourceUserAtHost: string;
   sourcePackPath: string;
   sourcePort: number;
+  channel: TransferChannel;
+  sourceTailcatAddr: string;
   targetAgent: string;
   targetUserAtHost: string;
   targetPackPath: string;
   targetPort: number;
+  targetTailcatAddr: string;
   outputPath: string;
   skipCheck: boolean;
   saveLocally: boolean;
+  channelPreset?: boolean;
   planFile?: string;
   sourceProfile?: Profile;
   targetProfile?: Profile;
   projectConfig?: ProjectTransferConfig;
+}
+
+function parseChannelOption(value: string | undefined): TransferChannel | null {
+  if (!value) return 'ssh';
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'ssh' || normalized === 'tailcat') return normalized;
+  return null;
+}
+
+function printTailcatServeHelp(role: 'source' | 'target'): void {
+  logger.info(`On the ${role} host, start a tailcat SSH server first (it prints a fresh tcXXX... address):`);
+  logger.info('  tailcat serve ssh --ssh-authorized-keys=~/.ssh/authorized_keys');
+  logger.info('  (or: tailcat serve no-auth-ssh — WARNING: the address grants shell access, share it privately only)');
+  logger.info('Notes: the address is case-sensitive and expires when the serve process exits.');
 }
 
 export async function configureTransport(options: {
@@ -48,10 +68,13 @@ export async function configureTransport(options: {
   sourceHost?: string;
   sourcePath?: string;
   sourcePort?: string;
+  channel?: string;
+  sourceAddr?: string;
   targetAgent?: string;
   targetHost?: string;
   targetPath?: string;
   targetPort?: string;
+  targetAddr?: string;
   output?: string;
 }): Promise<void> {
   const planPath = options.plan || options.planFile;
@@ -60,27 +83,42 @@ export async function configureTransport(options: {
     return;
   }
 
+  const channelOption = parseChannelOption(options.channel);
+  if (channelOption === null) {
+    logger.error(`Invalid --channel value: "${options.channel}". Use "ssh" or "tailcat".`);
+    return;
+  }
+  // An address flag implies the tailcat channel even when --channel is omitted.
+  const channel: TransferChannel = channelOption === 'ssh' && (options.sourceAddr || options.targetAddr)
+    ? 'tailcat'
+    : channelOption;
+
   const state: TransportWizardState = {
     sourceAgent: options.sourceAgent || '',
     sourceUserAtHost: options.sourceHost || '',
     sourcePackPath: options.sourcePath || '',
     sourcePort: parsePort(options.sourcePort, DEFAULT_SSH_PORT),
+    channel,
+    sourceTailcatAddr: options.sourceAddr || '',
     targetAgent: options.targetAgent || '',
     targetUserAtHost: options.targetHost || '',
     targetPackPath: options.targetPath || '',
     targetPort: parsePort(options.targetPort, DEFAULT_SSH_PORT),
+    targetTailcatAddr: options.targetAddr || '',
     outputPath: options.output || '',
     skipCheck: options.skipCheck || false,
     saveLocally: options.saveLocally || false,
+    channelPreset: Boolean(options.channel) || Boolean(options.sourceAddr || options.targetAddr),
   };
 
   logger.info('=== ASTP Transport Wizard ===');
   logger.info('Step-by-step guided configuration. Press Ctrl+C to cancel at any time.');
 
-  if (!state.saveLocally && !state.targetAgent && !state.targetUserAtHost) {
+  if (!state.saveLocally && !state.targetAgent && !state.targetUserAtHost && !state.targetTailcatAddr) {
     await step0_selectMode(state);
   }
 
+  await step05_selectChannel(state);
   await step1_selectSourceAgent(state);
   if (!state.saveLocally) {
     await step2_selectTargetAgent(state);
@@ -116,6 +154,28 @@ async function step0_selectMode(state: TransportWizardState): Promise<void> {
 
   state.saveLocally = mode === 'save_locally';
   logger.info(`[Step 0] Mode: ${state.saveLocally ? 'Save locally' : 'Transfer to target'}`);
+}
+
+async function step05_selectChannel(state: TransportWizardState): Promise<void> {
+  if (state.channelPreset) {
+    logger.info(`[Step 0.5] Transfer channel: ${state.channel} (from flags)`);
+    return;
+  }
+
+  const { channel } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'channel',
+      message: '[Step 0.5] How do you reach the remote hosts?',
+      choices: [
+        { name: 'SSH — user@host, key-based auth, port 22', value: 'ssh' },
+        { name: 'tailcat — tcXXX address, no SSH keys, NAT traversal (github.com/tailscale/tailcat)', value: 'tailcat' },
+      ],
+    },
+  ]);
+
+  state.channel = channel as TransferChannel;
+  logger.info(`[Step 0.5] Channel: ${state.channel}`);
 }
 
 async function step1_selectSourceAgent(state: TransportWizardState): Promise<void> {
@@ -200,6 +260,30 @@ async function step2_selectTargetAgent(state: TransportWizardState): Promise<voi
 }
 
 async function step3_enterSourceEndpoint(state: TransportWizardState): Promise<void> {
+  if (state.channel === 'tailcat') {
+    if (state.sourceTailcatAddr) {
+      logger.info(`[Step 3] Source tailcat address: ${state.sourceTailcatAddr} (from flags)`);
+      return;
+    }
+
+    logger.info('[Step 3] Source reachable via tailcat.');
+    printTailcatServeHelp('source');
+
+    const { sourceTailcatAddr } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'sourceTailcatAddr',
+        message: '[Step 3] Source tailcat address (tcXXX...):',
+        validate: (v: string) => isValidTailcatAddress(v.trim())
+          ? true
+          : 'Invalid tailcat address. Paste the full address printed by `tailcat serve` (starts with `tc`, case-sensitive).',
+      },
+    ]);
+
+    state.sourceTailcatAddr = sourceTailcatAddr.trim();
+    return;
+  }
+
   if (state.sourceUserAtHost) {
     logger.info(`[Step 3] Source endpoint: ${state.sourceUserAtHost} (from flags)`);
     return;
@@ -250,6 +334,30 @@ async function step4_enterSourcePackPath(state: TransportWizardState): Promise<v
 }
 
 async function step5_enterTargetEndpoint(state: TransportWizardState): Promise<void> {
+  if (state.channel === 'tailcat') {
+    if (state.targetTailcatAddr) {
+      logger.info(`[Step 5] Target tailcat address: ${state.targetTailcatAddr} (from flags)`);
+      return;
+    }
+
+    logger.info('[Step 5] Target reachable via tailcat.');
+    printTailcatServeHelp('target');
+
+    const { targetTailcatAddr } = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'targetTailcatAddr',
+        message: '[Step 5] Target tailcat address (tcXXX...):',
+        validate: (v: string) => isValidTailcatAddress(v.trim())
+          ? true
+          : 'Invalid tailcat address. Paste the full address printed by `tailcat serve` (starts with `tc`, case-sensitive).',
+      },
+    ]);
+
+    state.targetTailcatAddr = targetTailcatAddr.trim();
+    return;
+  }
+
   if (state.targetUserAtHost) {
     logger.info(`[Step 5] Target endpoint: ${state.targetUserAtHost} (from flags)`);
     return;
@@ -312,6 +420,8 @@ async function step7_connectivityTest(state: TransportWizardState): Promise<void
     userAtHost: state.sourceUserAtHost,
     packPath: state.sourcePackPath,
     port: state.sourcePort,
+    channel: state.channel,
+    tailcatAddr: state.channel === 'tailcat' ? state.sourceTailcatAddr : undefined,
   };
 
   const target: TransferEndpoint = {
@@ -319,6 +429,8 @@ async function step7_connectivityTest(state: TransportWizardState): Promise<void
     userAtHost: state.targetUserAtHost,
     packPath: state.targetPackPath,
     port: state.targetPort,
+    channel: state.channel,
+    tailcatAddr: state.channel === 'tailcat' ? state.targetTailcatAddr : undefined,
   };
 
   const sourceCheck = await checkEndpoint(source, 'source');
@@ -362,15 +474,26 @@ async function step7_connectivityTest(state: TransportWizardState): Promise<void
   }
 }
 
+function truncateForTable(value: string, width: number): string {
+  return value.length > width ? `${value.substring(0, width - 3)}...` : value.padEnd(width);
+}
+
 async function step8_previewAndEdit(state: TransportWizardState): Promise<boolean> {
+  const isTailcat = state.channel === 'tailcat';
+  const sourceEndpoint = isTailcat ? `tailcat:${state.sourceTailcatAddr}` : state.sourceUserAtHost;
+  const targetEndpoint = isTailcat ? (state.saveLocally ? '(local backup)' : `tailcat:${state.targetTailcatAddr}`) : state.targetUserAtHost;
+
   logger.info('[Step 8] Transport Plan Preview:');
   logger.info('');
   logger.info('  | Field         | Source                    | Target                    |');
   logger.info('  |---------------|---------------------------|---------------------------|');
-  logger.info(`  | Agent         | ${state.sourceAgent.padEnd(25)} | ${state.targetAgent.padEnd(25)} |`);
-  logger.info(`  | Endpoint      | ${state.sourceUserAtHost.padEnd(25)} | ${state.targetUserAtHost.padEnd(25)} |`);
-  logger.info(`  | SSH Port      | ${String(state.sourcePort).padEnd(25)} | ${String(state.targetPort).padEnd(25)} |`);
-  logger.info(`  | Pack Path     | ${state.sourcePackPath.padEnd(25)} | ${state.targetPackPath.padEnd(25)} |`);
+  logger.info(`  | Agent         | ${truncateForTable(state.sourceAgent, 25)} | ${truncateForTable(state.targetAgent, 25)} |`);
+  logger.info(`  | Channel       | ${state.channel.padEnd(25)} | ${''.padEnd(25)} |`);
+  logger.info(`  | Endpoint      | ${truncateForTable(sourceEndpoint, 25)} | ${truncateForTable(targetEndpoint, 25)} |`);
+  if (!isTailcat) {
+    logger.info(`  | SSH Port      | ${String(state.sourcePort).padEnd(25)} | ${String(state.targetPort).padEnd(25)} |`);
+  }
+  logger.info(`  | Pack Path     | ${truncateForTable(state.sourcePackPath, 25)} | ${truncateForTable(state.targetPackPath, 25)} |`);
   logger.info('');
 
   const { action } = await inquirer.prompt([
@@ -389,21 +512,23 @@ async function step8_previewAndEdit(state: TransportWizardState): Promise<boolea
   if (action === 'confirm') {
     return true;
   } else if (action === 'edit') {
+    const editChoices = [
+      'sourceAgent',
+      'sourcePackPath',
+      'targetAgent',
+      'targetPackPath',
+      'channel',
+      ...(state.channel === 'tailcat'
+        ? ['sourceTailcatAddr', 'targetTailcatAddr']
+        : ['sourceUserAtHost', 'sourcePort', 'targetUserAtHost', 'targetPort']),
+    ];
+
     const { editField: fieldToEdit } = await inquirer.prompt([
       {
         type: 'list',
         name: 'editField',
         message: 'Which field to edit?',
-        choices: [
-          'sourceAgent',
-          'sourceUserAtHost',
-          'sourcePackPath',
-          'sourcePort',
-          'targetAgent',
-          'targetUserAtHost',
-          'targetPackPath',
-          'targetPort',
-        ],
+        choices: editChoices,
       },
     ]);
 
@@ -416,6 +541,51 @@ async function step8_previewAndEdit(state: TransportWizardState): Promise<boolea
 
 async function editField(field: string, state: TransportWizardState): Promise<void> {
   switch (field) {
+    case 'channel': {
+      const { channel } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'channel',
+          message: 'New transfer channel:',
+          choices: [
+            { name: 'SSH — user@host, key-based auth', value: 'ssh' },
+            { name: 'tailcat — tcXXX address, no SSH keys', value: 'tailcat' },
+          ],
+        },
+      ]);
+      state.channel = channel as TransferChannel;
+      state.sourceUserAtHost = '';
+      state.sourceTailcatAddr = '';
+      state.targetUserAtHost = '';
+      state.targetTailcatAddr = '';
+      break;
+    }
+    case 'sourceTailcatAddr': {
+      const { sourceTailcatAddr } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'sourceTailcatAddr',
+          message: 'New source tailcat address (tcXXX...):',
+          default: state.sourceTailcatAddr,
+          validate: (v: string) => isValidTailcatAddress(v.trim()) ? true : 'Invalid tailcat address.',
+        },
+      ]);
+      state.sourceTailcatAddr = sourceTailcatAddr.trim();
+      break;
+    }
+    case 'targetTailcatAddr': {
+      const { targetTailcatAddr } = await inquirer.prompt([
+        {
+          type: 'input',
+          name: 'targetTailcatAddr',
+          message: 'New target tailcat address (tcXXX...):',
+          default: state.targetTailcatAddr,
+          validate: (v: string) => isValidTailcatAddress(v.trim()) ? true : 'Invalid tailcat address.',
+        },
+      ]);
+      state.targetTailcatAddr = targetTailcatAddr.trim();
+      break;
+    }
     case 'sourceAgent':
       state.sourceAgent = '';
       await step1_selectSourceAgent(state);
@@ -533,6 +703,8 @@ async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath
     userAtHost: state.sourceUserAtHost,
     packPath: state.sourcePackPath,
     port: state.sourcePort,
+    channel: state.channel,
+    tailcatAddr: state.channel === 'tailcat' ? state.sourceTailcatAddr : undefined,
   };
 
   const target: TransferEndpoint = {
@@ -540,6 +712,8 @@ async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath
     userAtHost: state.targetUserAtHost,
     packPath: state.targetPackPath,
     port: state.targetPort,
+    channel: state.channel,
+    tailcatAddr: state.channel === 'tailcat' ? state.targetTailcatAddr : undefined,
   };
 
   let validation: TransportPlan['validation'];
@@ -557,7 +731,7 @@ async function buildAndSavePlan(state: TransportWizardState): Promise<{ planPath
   }
 
   const plan: TransportPlan = {
-    version: state.projectConfig?.enabled ? '1.1' : '1.0',
+    version: state.channel === 'tailcat' ? '1.2' : state.projectConfig?.enabled ? '1.1' : '1.0',
     created_at: new Date().toISOString(),
     source,
     target: state.saveLocally ? { ...source, agent: '(local backup)' } : target,
@@ -613,8 +787,14 @@ async function executeFromPlan(planFile: string): Promise<void> {
   const plan = yaml.load(content) as TransportPlan;
 
   logger.info(`Executing from saved plan: ${planPath}`);
-  logger.info(`Source: ${plan.source.agent} @ ${plan.source.userAtHost}:${plan.source.port}`);
-  logger.info(`Target: ${plan.target.agent} @ ${plan.target.userAtHost}:${plan.target.port}`);
+  const planChannel = plan.source.channel ?? 'ssh';
+  if (planChannel === 'tailcat') {
+    logger.info(`Source: ${plan.source.agent} via tailcat:${plan.source.tailcatAddr ?? '(missing address)'}`);
+    logger.info(`Target: ${plan.target.agent} via tailcat:${plan.target.tailcatAddr ?? '(missing address)'}`);
+  } else {
+    logger.info(`Source: ${plan.source.agent} @ ${plan.source.userAtHost}:${plan.source.port}`);
+    logger.info(`Target: ${plan.target.agent} @ ${plan.target.userAtHost}:${plan.target.port}`);
+  }
 
   let sourceProfile: Profile | undefined;
   let targetProfile: Profile | undefined;
@@ -635,13 +815,17 @@ async function executeFromPlan(planFile: string): Promise<void> {
     sourceUserAtHost: plan.source.userAtHost,
     sourcePackPath: plan.source.packPath,
     sourcePort: plan.source.port,
+    channel: planChannel,
+    sourceTailcatAddr: plan.source.tailcatAddr ?? '',
     targetAgent: plan.target.agent,
     targetUserAtHost: plan.target.userAtHost,
     targetPackPath: plan.target.packPath,
     targetPort: plan.target.port,
+    targetTailcatAddr: plan.target.tailcatAddr ?? '',
     outputPath: '',
     skipCheck: true,
     saveLocally: plan.target.agent === '(local backup)',
+    channelPreset: true,
     sourceProfile,
     targetProfile,
     projectConfig: plan.projects,
@@ -681,7 +865,7 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
     return;
   }
 
-  logger.info('[Step 11] Launching source agent packing session via SSH...');
+  logger.info(`[Step 11] Launching source agent packing session via ${state.channel}...`);
 
   const remoteSessionDir = '/tmp/astp-session';
 
@@ -695,6 +879,8 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
     targetProfile: state.targetProfile!,
     sourceUserAtHost: state.sourceUserAtHost,
     sourcePort: state.sourcePort,
+    channel: state.channel,
+    sourceTailcatAddr: state.channel === 'tailcat' ? state.sourceTailcatAddr : undefined,
     sourcePackPath: state.sourcePackPath,
     localPackysPath: packysPath,
     localTargetProfilePath: targetProfilePath,
@@ -718,6 +904,8 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
   const localZipPath = await collectBundleAsZip({
     sourceUserAtHost: state.sourceUserAtHost,
     sourcePort: state.sourcePort,
+    channel: state.channel,
+    sourceTailcatAddr: state.channel === 'tailcat' ? state.sourceTailcatAddr : undefined,
     sourcePackPath: state.sourcePackPath,
     localOutputDir: localTmpDir,
   });
@@ -755,17 +943,23 @@ async function executeTransfer(state: TransportWizardState, planPath: string): P
     logger.info('');
     logger.info('To transfer later:');
     logger.info(`  astp transport --plan ${planPath}`);
-    logger.info(`  Or manually: scp ${localZipPath} ${state.targetUserAtHost}:${state.targetPackPath}/`);
+    if (state.channel === 'tailcat') {
+      logger.info(`  Or manually: tailcat cp ${localZipPath} ${state.targetTailcatAddr}:${state.targetPackPath}/`);
+    } else {
+      logger.info(`  Or manually: scp ${localZipPath} ${state.targetUserAtHost}:${state.targetPackPath}/`);
+    }
     return;
   }
 
   logger.info('[Step 12] Transferring zip to target host...');
-  const remoteZipPath = await transferZipToTarget(
+  const remoteZipPath = await transferZipToTarget({
     localZipPath,
-    state.targetUserAtHost,
-    state.targetPort,
-    state.targetPackPath,
-  );
+    targetUserAtHost: state.targetUserAtHost,
+    targetPort: state.targetPort,
+    targetPackPath: state.targetPackPath,
+    channel: state.channel,
+    targetTailcatAddr: state.channel === 'tailcat' ? state.targetTailcatAddr : undefined,
+  });
 
   if (remoteZipPath) {
     logger.info('Transfer complete.');
